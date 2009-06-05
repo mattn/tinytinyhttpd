@@ -257,6 +257,7 @@ unsigned long res_read(RES_INFO* res_info, char* data, unsigned long size) {
 
 RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs) {
 	int envs_len = 1;
+	int n;
 	char *envs_ptr;
 	char *ptr;
 	std::vector<std::string>::const_iterator it;
@@ -312,10 +313,15 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 	si.hStdOutput = hClientOut_wr;
 	si.hStdError  = hClientOut_wr;
 
-	for(it = args.begin(); it != args.end(); it++) {
-		if (it != args.begin())
-			command += " ";
-		command += *it;
+	for(it = args.begin(), n = 0; it != args.end(); it++, n++) {
+		if (it != args.begin()) command += " ";
+		if (n == 1) {
+			std::string path = args[1];
+			int end_pos = path.find_last_of('/');
+			if (end_pos) path.erase(0, end_pos + 1);
+			command += path;
+		} else
+			command += *it;
 	}
 
 	for(it = envs.begin(); it != envs.end(); it++)
@@ -326,14 +332,6 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 	for(it = envs.begin(); it != envs.end(); it++) {
 		strcpy(ptr, it->c_str());
 		ptr += it->size() + 1;
-#if 0
-		{
-			FILE *fp = fopen("c:\\xmlrpc\\unix\\test.bat", "a");
-			fputs(it->c_str(), fp);
-			fputs("\n", fp);
-			fclose(fp);
-		}
-#endif
 	}
 
 	std::string path = args[1];
