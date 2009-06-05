@@ -1,0 +1,9 @@
+.SUFFIXES: .cpp .obj
+
+all : httpd.exe
+
+httpd.exe : main.obj XmlRpcHttpd.obj XmlRpcUtils.obj
+	link /out:$@ main.obj XmlRpcHttpd.obj XmlRpcUtils.obj libxml2.lib libcurl_imp.lib libiconv.lib ole32.lib
+
+.cpp.obj :
+	cl /EHsc -c $<
