@@ -4,6 +4,7 @@
 #define XMLRPCHTTPD_VERSION 0x0100
 
 #pragma warning(disable:4018 4503 4530 4786)
+#define _CRT_SECURE_NO_WARNINGS
 #include <sys/types.h>
 #ifdef _WIN32
 #include <winsock2.h>
@@ -137,8 +138,8 @@ public:
 	}
 	static std::string get_realpath(std::string path) {
 		std::replace(path.begin(), path.end(), '\\', '/');
-		int end_pos = path.find_last_of("?#");
-		if (end_pos != -1) path.resize(end_pos);
+		size_t end_pos = path.find_last_of("?#");
+		if (end_pos != std::string::npos) path.resize(end_pos);
 
 		std::vector<std::string> path_sep = split_string(path, "/");
 		std::vector<std::string>::iterator it;
