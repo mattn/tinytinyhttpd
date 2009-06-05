@@ -317,15 +317,15 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 		if (it != args.begin()) command += " ";
 		if (n == 1) {
 			std::string path = args[1];
-			int end_pos = path.find_last_of('/');
-			if (end_pos) path.erase(0, end_pos + 1);
+			size_t end_pos = path.find_last_of('/');
+			if (end_pos != std::string::npos) path.erase(0, end_pos + 1);
 			command += path;
 		} else
 			command += *it;
 	}
 
 	for(it = envs.begin(); it != envs.end(); it++)
-		envs_len += it->size() + 1;
+		envs_len += (int)it->size() + 1;
 	envs_ptr = new char[envs_len];
 	memset(envs_ptr, 0, envs_len);
 	ptr = envs_ptr;
@@ -335,9 +335,8 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 	}
 
 	std::string path = args[1];
-	int end_pos = path.find_last_of('/');
-	if (end_pos)
-		path.erase(end_pos);
+	size_t end_pos = path.find_last_of('/');
+	if (end_pos != std::string::npos) path.erase(end_pos);
 
 	BOOL bRet = CreateProcessA(
 			NULL,
@@ -815,8 +814,8 @@ request_top:
 				std::string script_name = vparam[1];
 				std::string query_string;
 				std::string path_info;
-				int end_pos = vparam[1].find_first_of("?#");
-				if (end_pos != -1) {
+				size_t end_pos = vparam[1].find_first_of("?#");
+				if (end_pos != std::string::npos) {
 					query_string = script_name.substr(end_pos+1);
 					script_name = script_name.substr(0, end_pos);
 				}
@@ -865,7 +864,7 @@ request_top:
 					}
 					if (it_mime->second[0] == '@') {
 						match += _T("/");
-						tchar *tptr = _tcsstr(tpath.c_str(), match.c_str());
+						tchar *tptr = (tchar*)_tcsstr(tpath.c_str(), match.c_str());
 						if (tptr) {
 							type = tstring2string(it_mime->second);
 							res_type = type;
@@ -979,6 +978,14 @@ request_top:
 					env += buf;
 					envs.push_back(env);
 
+					env = "SERVER_NAME=";
+					env += httpd->hostname;
+					envs.push_back(env);
+
+					env = "SERVER_PORT=";
+					env += buf;
+					envs.push_back(env);
+
 					env = "REMOTE_ADDR=";
 					env += httpd->hostaddr;
 					envs.push_back(env);
@@ -1023,9 +1030,11 @@ request_top:
 					envs.push_back(env);
 
 					env = "REDIRECT_STATUS=1";
-					env += path_info;
 					envs.push_back(env);
 
+					env = "PATH=";
+					env += getenv("PATH");
+					envs.push_back(env);
 #ifdef _WIN32
 					GetWindowsDirectoryA(buf, sizeof(buf));
 					env = "SystemRoot=";
@@ -1049,7 +1058,9 @@ request_top:
 
 					if (post_data) {
 						res_write(res_info, post_data, post_size);
+#ifndef _WIN32
 						fflush((FILE*)res_info->write);
+#endif
 						delete[] post_data;
 						post_data = NULL;
 						post_size = 0;
@@ -1110,6 +1121,10 @@ request_top:
 			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
 				res_code = "HTTP/1.1 401 Unauthorized";
 			}
+			key = "Status:";
+			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
+				res_code = "HTTP/1.1" + str.substr(key.size());
+			}
 			res_head += str;
 			res_head += "\r\n";
 		}
@@ -1117,11 +1132,11 @@ request_top:
 			keep_alive = false;
 	}
 
-	send(msgsock, res_code.c_str(), res_code.size(), 0);
+	send(msgsock, res_code.c_str(), (int)res_code.size(), 0);
 	send(msgsock, "\r\n", 2, 0);
 
 	if (res_head.size()) {
-		send(msgsock, res_head.c_str(), res_head.size(), 0);
+		send(msgsock, res_head.c_str(), (int)res_head.size(), 0);
 	}
 
 	if (res_info) {
@@ -1140,29 +1155,28 @@ request_top:
 			ret = "Connection: keep-alive\r\n";
 		else
 			ret = "Connection: close\r\n";
-		send(msgsock, ret.c_str(), ret.size(), 0);
+		send(msgsock, ret.c_str(), (int)ret.size(), 0);
 
-		send(msgsock, ret.c_str(), ret.size(), 0);
 		ret = "Content-Type: ";
 		ret += res_type + "\r\n";
-		send(msgsock, ret.c_str(), ret.size(), 0);
+		send(msgsock, ret.c_str(), (int)ret.size(), 0);
 
 		ret = res_body;
 		sprintf(length, "%d", ret.size());
 		ret = "Content-Length: ";
 		ret += length;
 		ret += "\r\n";
-		send(msgsock, ret.c_str(), ret.size(), 0);
+		send(msgsock, ret.c_str(), (int)ret.size(), 0);
 
 		send(msgsock, "\r\n", 2, 0);
 
 		if (vparam.size() > 0 && vparam[0] != "HEAD") {
 			ret = res_body;
-			send(msgsock, ret.c_str(), ret.size(), 0);
+			send(msgsock, ret.c_str(), (int)ret.size(), 0);
 		}
 	}
 	else
-		send(msgsock, "\r\n", 2, 0);
+		send(msgsock, "\r\n", (int)2, 0);
 
 #if 0
 	fd_set fdset;
