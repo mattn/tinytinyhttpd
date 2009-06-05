@@ -20,7 +20,7 @@ static int getopt(int argc, char** argv, const char* opts) {
 		}
 	}
 	optopt = c = argv[optind][sp];
-	if(c == ':' || (cp=strchr(opts, c)) == NULL) {
+	if(c == ':' || (cp=strchr((char*)opts, c)) == NULL) {
 		if(argv[optind][++sp] == '\0') {
 			optind++;
 			sp = 1;
