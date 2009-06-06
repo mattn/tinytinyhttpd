@@ -71,8 +71,13 @@ int main(int argc, char* argv[]) {
 	}
 	XmlRpc::XmlRpcHttpd httpd(port);
 	httpd.bindRoot(root);
+#ifdef _WIN32
 	httpd.mime_types["cgi"] = "@c:/strawberry/perl/bin/perl.exe";
 	httpd.mime_types["php"] = "@c:/progra~1/php/php.exe";
+#else
+	httpd.mime_types["cgi"] = "@/usr/bin/perl";
+	httpd.mime_types["php"] = "@/usr/bin/php";
+#endif
 	httpd.start();
 	httpd.wait();
 	// Ctrl-C to break

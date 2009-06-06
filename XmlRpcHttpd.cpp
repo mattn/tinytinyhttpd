@@ -516,8 +516,18 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 	memset(args_ptr, 0, sizeof(args_ptr));
 	memset(envs_ptr, 0, sizeof(envs_ptr));
 	std::vector<std::string>::iterator it;
-	for(n = 0, it = args.begin(); it != args.end(); n++, it++)
-		args_ptr[n] = (char*)it->c_str();
+	for(n = 0, it = args.begin(); it != args.end(); n++, it++) {
+		if (n == 1) {
+			std::string path = args[1];
+			size_t end_pos = path.find_last_of('/');
+			if (end_pos != std::string::npos)
+				args_ptr[n] = (char*)path.c_str() + end_pos + 1;
+			else
+				args_ptr[n] = (char*)path.c_str();
+		} else
+			args_ptr[n] = (char*)it->c_str();
+		printf("%s\n", args_ptr[n]);
+	}
 	for(n = 0, it = envs.begin(); it != envs.end(); n++, it++)
 		envs_ptr[n] = (char*)it->c_str();
 
