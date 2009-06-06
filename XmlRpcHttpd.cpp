@@ -1023,6 +1023,10 @@ request_top:
 					env += vparam[0];
 					envs.push_back(env);
 
+					env = "REQUEST_URI=";
+					env += vparam[1];
+					envs.push_back(env);
+
 					env = "SCRIPT_FILENAME=";
 					env += path;
 					envs.push_back(env);
