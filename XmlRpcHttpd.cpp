@@ -526,7 +526,6 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 				args_ptr[n] = (char*)path.c_str();
 		} else
 			args_ptr[n] = (char*)it->c_str();
-		printf("%s\n", args_ptr[n]);
 	}
 	for(n = 0, it = envs.begin(); it != envs.end(); n++, it++)
 		envs_ptr[n] = (char*)it->c_str();
