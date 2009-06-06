@@ -1,4 +1,5 @@
 #include "XmlRpcHttpd.h"
+#include <string.h>
 
 int  opterr = 1;
 int  optind = 1;
@@ -48,7 +49,7 @@ static int getopt(int argc, char** argv, const char* opts) {
 
 int main(int argc, char* argv[]) {
 	int c;
-	char* root = "./public_html";
+	const char* root = "./public_html";
 	unsigned short port = 80;
 
 #ifdef _WIN32

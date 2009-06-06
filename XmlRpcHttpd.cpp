@@ -2,6 +2,7 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <string.h>
 #ifndef _WIN32
 #include <signal.h>
 #include <dirent.h>
@@ -902,7 +903,7 @@ request_top:
 							res_body += it->name;
 							res_body += "</a></td><td align=right>&nbsp;&nbsp;";
 							if (!it->isdir) {
-								sprintf(buf, "%d", it->size);
+								sprintf(buf, "%d", (int)it->size);
 								res_body += buf;
 							} else
 								res_body += "[DIR]";
@@ -923,7 +924,7 @@ request_top:
 				res_code = "HTTP/1.1 200 OK";
 				if (type[0] != '@') {
 					std::string file_time = res_ftime(path);
-					sprintf(buf, "%d", res_fsize(res_info));
+					sprintf(buf, "%d", (int)res_fsize(res_info));
 					if (if_modified_since.size() && if_modified_since == file_time) {
 						res_close(res_info);
 						res_info = NULL;
@@ -1047,7 +1048,7 @@ request_top:
 						env += content_type;
 						envs.push_back(env);
 
-						sprintf(buf, "%d", post_size);
+						sprintf(buf, "%d", (int)post_size);
 						env = "CONTENT_LENGTH=";
 						env += buf;
 						envs.push_back(env);
