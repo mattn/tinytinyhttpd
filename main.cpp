@@ -47,6 +47,10 @@ static int getopt(int argc, char** argv, const char* opts) {
 	return(c);
 }
 
+void logFunc(const XmlRpc::XmlRpcHttpd::HttpdInfo* httpd_info, const tstring& request) {
+	printf("%s\n", request.c_str());
+}
+
 int main(int argc, char* argv[]) {
 	int c;
 	const char* root = "./public_html";
@@ -70,13 +74,14 @@ int main(int argc, char* argv[]) {
 		optarg = NULL;
 	}
 	XmlRpc::XmlRpcHttpd httpd(port);
+	httpd.loggerfunc = logFunc;
 	httpd.bindRoot(root);
 #ifdef _WIN32
 	httpd.mime_types["cgi"] = "@c:/strawberry/perl/bin/perl.exe";
 	httpd.mime_types["php"] = "@c:/progra~1/php/php.exe";
 #else
 	httpd.mime_types["cgi"] = "@/usr/bin/perl";
-	httpd.mime_types["php"] = "@/usr/bin/php";
+	httpd.mime_types["php"] = "@/usr/bin/php-cgi";
 #endif
 	httpd.start();
 	httpd.wait();

@@ -821,6 +821,7 @@ request_top:
 			} else
 			if (vparam[0] == "GET" || vparam[0] == "POST" || vparam[0] == "HEAD") {
 				std::string root = httpd->root;
+				std::string request_uri = vparam[1];
 				std::string script_name = vparam[1];
 				std::string query_string;
 				std::string path_info;
@@ -828,6 +829,7 @@ request_top:
 				if (end_pos != std::string::npos) {
 					query_string = script_name.substr(end_pos+1);
 					script_name = script_name.substr(0, end_pos);
+					request_uri = script_name;
 				}
 
 				std::string path = XmlRpcHttpd::get_realpath(root + XmlRpc::urldecode(vparam[1]));
@@ -1024,7 +1026,7 @@ request_top:
 					envs.push_back(env);
 
 					env = "REQUEST_URI=";
-					env += vparam[1];
+					env += request_uri;
 					envs.push_back(env);
 
 					env = "SCRIPT_FILENAME=";
@@ -1149,6 +1151,7 @@ request_top:
 	send(msgsock, res_code.c_str(), (int)res_code.size(), 0);
 	send(msgsock, "\r\n", 2, 0);
 
+	printf("%s\n", res_head.c_str());
 	if (res_head.size()) {
 		send(msgsock, res_head.c_str(), (int)res_head.size(), 0);
 	}
