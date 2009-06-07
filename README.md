@@ -24,3 +24,4 @@ SCREEN SHOT:
 
 ![MTOS working](http://farm4.static.flickr.com/3305/3597469456_1f5210975f_o.png "MTOS Working")
 
+![WordPress working] (http://farm4.static.flickr.com/3643/3603370389_4d4bc5c9c3_o.png "WordPress Working")
