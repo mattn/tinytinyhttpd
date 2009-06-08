@@ -1,8 +1,8 @@
 .SUFFIXES: .cpp .obj
 
-all : httpd.exe
+all : tthttpd.exe
 
-httpd.exe : main.obj XmlRpcHttpd.obj XmlRpcUtils.obj
+tthttpd.exe : main.obj XmlRpcHttpd.obj XmlRpcUtils.obj
 	link /out:$@ main.obj XmlRpcHttpd.obj XmlRpcUtils.obj libxml2.lib libcurl_imp.lib libiconv.lib ole32.lib
 
 .cpp.obj :
