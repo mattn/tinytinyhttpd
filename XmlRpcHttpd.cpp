@@ -829,7 +829,8 @@ request_top:
 				if (end_pos != std::string::npos) {
 					query_string = script_name.substr(end_pos+1);
 					script_name = script_name.substr(0, end_pos);
-					request_uri = script_name;
+					//request_uri = script_name;
+					path_info = script_name;
 				}
 
 				std::string path = XmlRpcHttpd::get_realpath(root + XmlRpc::urldecode(vparam[1]));
@@ -983,19 +984,16 @@ request_top:
 
 					std::string env;
 
-					sprintf(buf, "%d", httpd->port);
-					env = "HTTP_HOST=";
-					env += httpd->hostname;
-					env += ":";
-					env += buf;
+					sprintf(buf, "HTTP_HOST=%s:%d", httpd->hostname.c_str(), httpd->port);
+					env = buf;
 					envs.push_back(env);
 
 					env = "SERVER_NAME=";
 					env += httpd->hostname;
 					envs.push_back(env);
 
-					env = "SERVER_PORT=";
-					env += buf;
+					sprintf(buf, "SERVER_PORT=%d", httpd->port);
+					env = buf;
 					envs.push_back(env);
 
 					env = "REMOTE_ADDR=";
@@ -1059,7 +1057,7 @@ request_top:
 					envs.push_back(env);
 #endif
 
-					env = "SERVER_SOFTWARE=tinytinyhttpd version 0.1";
+					env = "SERVER_SOFTWARE=tinytinyhttpd";
 					envs.push_back(env);
 
 					env = "SERVER_PROTOCOL=HTTP/1.1";
@@ -1137,6 +1135,12 @@ request_top:
 			memset(buf, 0, sizeof(buf));
 			str = res_fgets(res_info);
 			if (str.size() == 0) break;
+			printf("[%s]\n", str.c_str());
+			if (str[0] == '<') {
+				send(msgsock, str.c_str(), str.size(), 0);
+				res_code = "";
+				break;
+			}
 			key = "connection:";
 			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
 				http_connection = trim_string(str.c_str() + key.size());
@@ -1158,10 +1162,11 @@ request_top:
 			keep_alive = false;
 	}
 
-	send(msgsock, res_code.c_str(), (int)res_code.size(), 0);
-	send(msgsock, "\r\n", 2, 0);
+	if (res_code.size()) {
+		send(msgsock, res_code.c_str(), (int)res_code.size(), 0);
+		send(msgsock, "\r\n", 2, 0);
+	}
 
-	printf("%s\n", res_head.c_str());
 	if (res_head.size()) {
 		send(msgsock, res_head.c_str(), (int)res_head.size(), 0);
 	}
