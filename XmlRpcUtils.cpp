@@ -369,7 +369,7 @@ std::string string_to_utf8(std::string str) {
 	std::string strRet;
 	std::wstring strSrc;
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 	UINT codePage;
 	size_t in_len = str.size();
 	codePage = GetACP();
@@ -430,7 +430,7 @@ tstring string_to_utf8(tstring str) {
 std::string utf8_to_string(std::string str) {
 	std::string strRet;
 
-#ifdef _MSC_VER1
+#ifdef _WIN32
 	UINT codePage = CP_UTF8;
 	const char* ptr = str.c_str();
 	if (str[0] == (char)0xef && str[1] == (char)0xbb && str[2] == (char)0xbf)

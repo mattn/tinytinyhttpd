@@ -1,5 +1,6 @@
 #include "XmlRpcHttpd.h"
 #include <string.h>
+#include <string.h>
 
 int  opterr = 1;
 int  optind = 1;
@@ -49,6 +50,10 @@ static int getopt(int argc, char** argv, const char* opts) {
 
 void logFunc(const XmlRpc::XmlRpcHttpd::HttpdInfo* httpd_info, const tstring& request) {
 	printf("%s\n", request.c_str());
+}
+
+void loadConfig() {
+
 }
 
 int main(int argc, char* argv[]) {

@@ -1051,12 +1051,22 @@ request_top:
 					env = "PATH=";
 					env += getenv("PATH");
 					envs.push_back(env);
+
 #ifdef _WIN32
 					GetWindowsDirectoryA(buf, sizeof(buf));
 					env = "SystemRoot=";
 					env += buf;
 					envs.push_back(env);
 #endif
+
+					env = "SERVER_SOFTWARE=tinytinyhttpd version 0.1";
+					envs.push_back(env);
+
+					env = "SERVER_PROTOCOL=HTTP/1.1";
+					envs.push_back(env);
+
+					env = "GATEWAY_INTERFACE=CGI/1.1";
+					envs.push_back(env);
 
 					if (vparam[0] == "POST") {
 						env = "CONTENT_TYPE=";
