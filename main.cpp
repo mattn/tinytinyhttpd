@@ -52,14 +52,43 @@ void logFunc(const XmlRpc::XmlRpcHttpd::HttpdInfo* httpd_info, const tstring& re
 	printf("%s\n", request.c_str());
 }
 
-void loadConfig() {
-
+typedef std::map<std::string, std::string>	Config;
+typedef std::map<std::string, Config>		ConfigList;
+ConfigList loadConfigs(const char* filename) {
+	ConfigList configs;
+	Config config;
+	char buffer[BUFSIZ];
+	FILE* fp = fopen(filename, "r");
+	std::string profile = "global";
+	while(fp && fgets(buffer, sizeof(buffer), fp)) {
+		char* line = buffer;
+		char* ptr = strpbrk(line, "\r\n");
+		if (ptr) *ptr = 0;
+		ptr = strchr(line, ']');
+		if (*line == '[' && ptr) {
+			*ptr = 0;
+			if (config.size())
+				configs[profile] = config;
+			config.clear();
+			profile = line+1;
+			continue;
+		}
+		ptr = strchr(line, '=');
+		if (ptr && *line != ';') {
+			*ptr++ = 0;
+			config[line] = ptr;
+		}
+	}
+	configs[profile] = config;
+	if (fp) fclose(fp);
+	return configs;
 }
 
 int main(int argc, char* argv[]) {
 	int c;
 	const char* root = "./public_html";
 	unsigned short port = 80;
+	const char* cfg = NULL;
 
 #ifdef _WIN32
 	WSADATA wsaData;
@@ -67,9 +96,10 @@ int main(int argc, char* argv[]) {
 #endif
 
 	opterr = 0;
-	while ((c = getopt(argc, (char**)argv, "p:d:") != -1)) {
+	while ((c = getopt(argc, (char**)argv, "p:c:d:") != -1)) {
 		switch (optopt) {
 		case 'p': port = (unsigned short)atol(optarg); break;
+		case 'c': cfg = optarg; break;
 		case 'd': root = optarg; break;
 		case '?': break;
 		default:
@@ -78,9 +108,30 @@ int main(int argc, char* argv[]) {
 		}
 		optarg = NULL;
 	}
+
 	XmlRpc::XmlRpcHttpd httpd(port);
 	httpd.loggerfunc = logFunc;
 	httpd.bindRoot(root);
+	if (cfg) {
+		ConfigList configs = loadConfigs(cfg);
+		Config config;
+		Config::iterator it;
+		std::string val;
+
+		val = configs["global"]["root"];
+		if (val.size()) httpd.bindRoot(val);
+		val = configs["global"]["port"];
+		if (val.size()) httpd.port = atol(val.c_str());
+		val = configs["global"]["indexpages"];
+		if (val.size()) httpd.default_pages = XmlRpc::split_string(val, ",");
+		val = configs["global"]["charset"];
+		if (val.size()) httpd.fs_charset = val;
+
+		config = configs["mime/types"];
+		for (it = config.begin(); it != config.end(); it++)
+			httpd.mime_types[it->first] = it->second;
+
+	} else {
 #ifdef _WIN32
 	httpd.mime_types["cgi"] = "@c:/strawberry/perl/bin/perl.exe";
 	httpd.mime_types["php"] = "@c:/progra~1/php/php.exe";
@@ -88,6 +139,7 @@ int main(int argc, char* argv[]) {
 	httpd.mime_types["cgi"] = "@/usr/bin/perl";
 	httpd.mime_types["php"] = "@/usr/bin/php-cgi";
 #endif
+	}
 	httpd.start();
 	httpd.wait();
 	// Ctrl-C to break
