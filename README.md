@@ -24,15 +24,16 @@ HOW TO DO:
 	# ./tthttpd -p 8080 -d path-to-root
 
 	# cat my-httpd.conf
-		[global]
-		port=8080
-		root=/path/to/contents
-		indexpages=index.html,index.php
-		charset=cp932
+	[global]
+	port=8080
+	root=/path/to/contents
+	indexpages=index.html,index.php
+	charset=cp932
 
-		[mime/types]
-		cgi=@/usr/bin/perl
-		php=@/usr/bin/php
+	[mime/types]
+	cgi=@/usr/bin/perl
+	php=@/usr/bin/php
+	
 	# ./tthttpd -c my-httpd.conf
 
 SCREEN SHOT:
