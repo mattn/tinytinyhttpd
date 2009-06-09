@@ -89,6 +89,7 @@ int main(int argc, char* argv[]) {
 	const char* root = "./public_html";
 	unsigned short port = 80;
 	const char* cfg = NULL;
+	bool verbose = false;
 
 #ifdef _WIN32
 	WSADATA wsaData;
@@ -96,11 +97,12 @@ int main(int argc, char* argv[]) {
 #endif
 
 	opterr = 0;
-	while ((c = getopt(argc, (char**)argv, "p:c:d:") != -1)) {
+	while ((c = getopt(argc, (char**)argv, "p:c:d:v") != -1)) {
 		switch (optopt) {
 		case 'p': port = (unsigned short)atol(optarg); break;
 		case 'c': cfg = optarg; break;
 		case 'd': root = optarg; break;
+		case 'v': verbose = true; break;
 		case '?': break;
 		default:
 			argc = 0;
@@ -112,6 +114,7 @@ int main(int argc, char* argv[]) {
 	XmlRpc::XmlRpcHttpd httpd(port);
 	//httpd.loggerfunc = logFunc;
 	httpd.bindRoot(root);
+	httpd.debug_mode = verbose;
 	if (cfg) {
 		ConfigList configs = loadConfigs(cfg);
 		Config config;

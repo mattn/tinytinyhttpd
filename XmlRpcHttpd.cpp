@@ -509,13 +509,14 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
     pid_t child;
     long flags;
     sigset_t newmask;
-	char* args_ptr[20];
-	char* envs_ptr[20];
+	char** args_ptr;
+	char** envs_ptr;
 	int n;
-
-	memset(args_ptr, 0, sizeof(args_ptr));
-	memset(envs_ptr, 0, sizeof(envs_ptr));
 	std::vector<std::string>::iterator it;
+
+	args_ptr = new char*[args.size() + 1];
+	envs_ptr = new char*[envs.size() + 1];
+
 	for(n = 0, it = args.begin(); it != args.end(); n++, it++) {
 		if (n == 1) {
 			std::string path = args[1];
@@ -527,8 +528,11 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 		} else
 			args_ptr[n] = (char*)it->c_str();
 	}
+	args_ptr[args.size()] = 0;
+
 	for(n = 0, it = envs.begin(); it != envs.end(); n++, it++)
 		envs_ptr[n] = (char*)it->c_str();
+	envs_ptr[envs.size()] = 0;
 
     pipe(filedesr);
     pipe(filedesw);
@@ -554,7 +558,8 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 		if (execve(args_ptr[0], args_ptr, envs_ptr) < 0) {
 			my_perror(_T("execv"));
 		}
-		_exit(0);
+		delete[] envs_ptr;
+		delete[] args_ptr;
     } else {
 		signal(SIGCHLD, res_popen_sigchild);
 		sigemptyset(&newmask);
@@ -821,7 +826,7 @@ request_top:
 				res_body += "</body></html>";
 			} else
 			if (vparam[0] == "GET" || vparam[0] == "POST" || vparam[0] == "HEAD") {
-				std::string root = httpd->root;
+				std::string root = XmlRpcHttpd::get_realpath(httpd->root + "/");
 				std::string request_uri = vparam[1];
 				std::string script_name = vparam[1];
 				std::string query_string;
@@ -865,7 +870,7 @@ request_top:
 
 				XmlRpcHttpd::DefaultPages::iterator it_page;
 				for(it_page = httpd->default_pages.begin(); it_page != httpd->default_pages.end(); it_page++) {
-					std::string try_path = path + tstring2string(*it_page);
+					std::string try_path = path + "/" + tstring2string(*it_page);
 					res_info = res_fopen(try_path);
 					if (res_info) {
 						path = try_path;
@@ -899,11 +904,11 @@ request_top:
 				}
 
 				if (res_isdir(path)) {
-					if (path.size() && path[path.size()-1] != '/') {
+					if (path_info.size() && path_info[path_info.size()-1] != '/') {
 						res_code = "HTTP/1.1 301 Document Moved";
 						res_body = "Document Moved\n";
 						res_head = "Location: ";
-						res_head += script_name;
+						res_head += path_info;
 						res_head += "/\n";
 					} else {
 						res_code = "HTTP/1.1 200 OK";
@@ -1301,7 +1306,10 @@ void* watch_thread(void* param)
 		if (msgsock == -1) {
 			closesocket(httpd->sock);
 			httpd->sock = -1;
+			/*
 			break;
+			*/
+			continue;
 		}
 		else {
 			std::string address = inet_ntoa(client.sin_addr);
