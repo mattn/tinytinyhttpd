@@ -51,6 +51,7 @@ public:
 	typedef void (*XmlRpcLoggerFunc)(const HttpdInfo* httpd_info, const tstring& request);
 	typedef std::map<tstring, tstring> MimeTypes;
 	typedef std::vector<tstring> DefaultPages;
+	typedef std::map<tstring, tstring> RequestAliases;
 
 private:
 	std::map<tstring, XmlRpcFunc> callbacks;
@@ -73,7 +74,9 @@ public:
 	AcceptIPs accept_ips;
 	MimeTypes mime_types;
 	DefaultPages default_pages;
+	RequestAliases request_aliases;
 	XmlRpcLoggerFunc loggerfunc;
+	bool debug_mode;
 
 	void initialize() {
 		sock = -1;
@@ -94,6 +97,7 @@ public:
 		default_pages.push_back(_T("index.html"));
 		default_pages.push_back(_T("index.php"));
 		default_pages.push_back(_T("index.cgi"));
+		debug_mode = false;
 	};
 
 	XmlRpcHttpd() {

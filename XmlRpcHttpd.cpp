@@ -706,6 +706,7 @@ request_top:
 		}
 	}
 
+	if (httpd->debug_mode) printf("* %s\n", req.c_str());
 	if (httpd->loggerfunc) {
 		tstring treq = string2tstring(req);
 		httpd->loggerfunc(pHttpdInfo, treq);
@@ -824,13 +825,21 @@ request_top:
 				std::string request_uri = vparam[1];
 				std::string script_name = vparam[1];
 				std::string query_string;
-				std::string path_info;
+				std::string path_info = "/";
 				size_t end_pos = vparam[1].find_first_of("?#");
 				if (end_pos != std::string::npos) {
 					query_string = script_name.substr(end_pos+1);
 					script_name = script_name.substr(0, end_pos);
 					//request_uri = script_name;
 					path_info = script_name;
+				}
+
+				XmlRpcHttpd::RequestAliases::iterator it_alias;
+				for(it_alias = httpd->request_aliases.begin(); it_alias != httpd->request_aliases.end(); it_alias++) {
+					if (path_info == it_alias->first) {
+						vparam[1] = it_alias->second;
+						break;
+					}
 				}
 
 				std::string path = XmlRpcHttpd::get_realpath(root + XmlRpc::urldecode(vparam[1]));
@@ -1103,7 +1112,7 @@ request_top:
 	}
 	catch(...) {
 		if (res_code.size() == 0) {
-			my_perror(_T("debug"));
+			if (httpd->debug_mode) my_perror(_T("debug"));
 			res_code = "HTTP/1.1 500 Bad Request";
 			res_body = "Internal Server Error\n";
 		}
@@ -1141,7 +1150,7 @@ request_top:
 				res_code = "";
 				break;
 			}
-			printf("[%s]\n", str.c_str());
+			if (httpd->debug_mode) printf("  %s\n", str.c_str());
 			key = "connection:";
 			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
 				http_connection = trim_string(str.c_str() + key.size());
@@ -1249,6 +1258,7 @@ void* watch_thread(void* param)
 
 	httpd->sock = socket(PF_INET, SOCK_STREAM, 0);
 	if (httpd->sock < 0) { 
+		if (httpd->debug_mode) my_perror("socket");
 		return NULL;
 	}
 	int optval = 1;
@@ -1260,10 +1270,12 @@ void* watch_thread(void* param)
 	server.sin_port = htons(httpd->port);
 
 	if (bind(httpd->sock, (struct sockaddr *)&server, sizeof server) < 0) {
+		if (httpd->debug_mode) my_perror("bind");
 		return NULL;
 	}
 
 	if (listen(httpd->sock, SOMAXCONN) < 0) {
+		if (httpd->debug_mode) my_perror("listen");
 		return NULL;
 	}
 

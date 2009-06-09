@@ -110,7 +110,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	XmlRpc::XmlRpcHttpd httpd(port);
-	httpd.loggerfunc = logFunc;
+	//httpd.loggerfunc = logFunc;
 	httpd.bindRoot(root);
 	if (cfg) {
 		ConfigList configs = loadConfigs(cfg);
@@ -126,6 +126,12 @@ int main(int argc, char* argv[]) {
 		if (val.size()) httpd.default_pages = XmlRpc::split_string(val, ",");
 		val = configs["global"]["charset"];
 		if (val.size()) httpd.fs_charset = val;
+		val = configs["global"]["debug"];
+		if (val == "on") httpd.debug_mode = true;
+
+		config = configs["request/aliases"];
+		for (it = config.begin(); it != config.end(); it++)
+			httpd.request_aliases[it->first] = it->second;
 
 		config = configs["mime/types"];
 		for (it = config.begin(); it != config.end(); it++)
