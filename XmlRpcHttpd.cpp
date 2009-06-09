@@ -887,7 +887,6 @@ request_top:
 					if (!_tcscmp(tpath.c_str()+tpath.size()-match.size(), match.c_str())) {
 						type = tstring2string(it_mime->second);
 						res_type = type;
-						break;
 					}
 					if (it_mime->second[0] == '@') {
 						match += _T("/");
@@ -898,9 +897,11 @@ request_top:
 							path_info = tptr + match.size() - 1;
 							path.resize(path.size() - path_info.size());
 							script_name.resize(script_name.size() - path_info.size());
-							break;
+						} else {
+							path_info = "";
 						}
 					}
+					if (type.size()) break;
 				}
 
 				if (res_isdir(path)) {
