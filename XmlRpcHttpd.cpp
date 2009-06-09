@@ -1135,12 +1135,13 @@ request_top:
 			memset(buf, 0, sizeof(buf));
 			str = res_fgets(res_info);
 			if (str.size() == 0) break;
-			printf("[%s]\n", str.c_str());
 			if (str[0] == '<') {
+				// workaround for broken non-header response.
 				send(msgsock, str.c_str(), str.size(), 0);
 				res_code = "";
 				break;
 			}
+			printf("[%s]\n", str.c_str());
 			key = "connection:";
 			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
 				http_connection = trim_string(str.c_str() + key.size());

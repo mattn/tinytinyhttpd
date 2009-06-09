@@ -9,6 +9,7 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #include <process.h>
+#include <direct.h>
 #include <io.h>
 #pragma comment(lib, "ws2_32.lib")
 #else
@@ -17,6 +18,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/uio.h>
+#include <limits.h>
 #include <unistd.h>
 #endif
 #include <sstream>
@@ -137,6 +139,16 @@ public:
 		root = get_realpath(tstring2string(_root));
 	}
 	static std::string get_realpath(std::string path) {
+#ifdef _WIN32
+		char fullpath[_MAX_PATH] = {0};
+		char* filepart = NULL;
+		if (GetFullPathName(path.c_str(), _MAX_PATH, fullpath, &filepart))
+			path = fullpath;
+#else
+		char fullpath[PATH_MAX] = {0};
+		if (realpath((char*)path.c_str(), fullpath))
+			path = fullpath;
+#endif
 		std::replace(path.begin(), path.end(), '\\', '/');
 		size_t end_pos = path.find_last_of("?#");
 		if (end_pos != std::string::npos) path.resize(end_pos);

@@ -5,5 +5,8 @@ all : tthttpd.exe
 tthttpd.exe : main.obj XmlRpcHttpd.obj XmlRpcUtils.obj
 	link /out:$@ main.obj XmlRpcHttpd.obj XmlRpcUtils.obj libxml2.lib libcurl_imp.lib libiconv.lib ole32.lib
 
+XmlRpcHttpd.cpp : XmlRpcHttpd.h XmlRpcUtils.h XmlRpcValue.h
+XmlRpcUtils.cpp : XmlRpcUtils.h XmlRpcValue.h
+main.cpp : XmlRpcHttpd.cpp
 .cpp.obj :
 	cl /EHsc -c $<
