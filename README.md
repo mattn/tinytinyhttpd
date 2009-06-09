@@ -23,6 +23,8 @@ HOW TO DO:
 
 	# ./tthttpd -p 8080 -d path-to-root
 
+or
+
 	# cat my-httpd.conf
 	[global]
 	port=8080
