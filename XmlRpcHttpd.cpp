@@ -1262,6 +1262,7 @@ void* watch_thread(void* param)
 	int msgsock;
 	struct sockaddr_in server;
 
+	signal(SIGPIPE, SIG_IGN);
 	httpd->sock = socket(PF_INET, SOCK_STREAM, 0);
 	if (httpd->sock < 0) { 
 		if (httpd->debug_mode) my_perror("socket");
