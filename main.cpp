@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
 
 	XmlRpc::XmlRpcHttpd httpd(port);
 	//httpd.loggerfunc = logFunc;
-	httpd.bindRoot(root);
+	httpd.bindRoot(XmlRpc::string2tstring(root));
 	httpd.debug_mode = verbose;
 	if (cfg) {
 		ConfigList configs = loadConfigs(cfg);
@@ -122,11 +122,11 @@ int main(int argc, char* argv[]) {
 		std::string val;
 
 		val = configs["global"]["root"];
-		if (val.size()) httpd.bindRoot(val);
+		if (val.size()) httpd.bindRoot(XmlRpc::string2tstring(val));
 		val = configs["global"]["port"];
 		if (val.size()) httpd.port = atol(val.c_str());
 		val = configs["global"]["indexpages"];
-		if (val.size()) httpd.default_pages = XmlRpc::split_string(val, ",");
+		if (val.size()) httpd.default_pages = XmlRpc::split_string(XmlRpc::string2tstring(val), _T(","));
 		val = configs["global"]["charset"];
 		if (val.size()) httpd.fs_charset = val;
 		val = configs["global"]["debug"];
@@ -134,19 +134,19 @@ int main(int argc, char* argv[]) {
 
 		config = configs["request/aliases"];
 		for (it = config.begin(); it != config.end(); it++)
-			httpd.request_aliases[it->first] = it->second;
+			httpd.request_aliases[XmlRpc::string2tstring(it->first)] = XmlRpc::string2tstring(it->second);
 
 		config = configs["mime/types"];
 		for (it = config.begin(); it != config.end(); it++)
-			httpd.mime_types[it->first] = it->second;
+			httpd.mime_types[XmlRpc::string2tstring(it->first)] = XmlRpc::string2tstring(it->second);
 
 	} else {
 #ifdef _WIN32
-	httpd.mime_types["cgi"] = "@c:/strawberry/perl/bin/perl.exe";
-	httpd.mime_types["php"] = "@c:/progra~1/php/php-cgi.exe";
+	httpd.mime_types[_T("cgi")] = _T("@c:/strawberry/perl/bin/perl.exe");
+	httpd.mime_types[_T("php")] = _T("@c:/progra~1/php/php-cgi.exe");
 #else
-	httpd.mime_types["cgi"] = "@/usr/bin/perl";
-	httpd.mime_types["php"] = "@/usr/bin/php-cgi";
+	httpd.mime_types[_T("cgi")] = _T("@/usr/bin/perl");
+	httpd.mime_types[_T("php")] = _T("@/usr/bin/php-cgi");
 #endif
 	}
 	httpd.start();

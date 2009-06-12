@@ -146,7 +146,7 @@ public:
 #ifdef _WIN32
 		char fullpath[_MAX_PATH] = {0};
 		char* filepart = NULL;
-		if (GetFullPathName(path.c_str(), _MAX_PATH, fullpath, &filepart))
+		if (GetFullPathNameA(path.c_str(), _MAX_PATH, fullpath, &filepart))
 			path = fullpath;
 #else
 		char fullpath[PATH_MAX] = {0};

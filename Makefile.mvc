@@ -9,4 +9,4 @@ XmlRpcHttpd.cpp : XmlRpcHttpd.h XmlRpcUtils.h XmlRpcValue.h
 XmlRpcUtils.cpp : XmlRpcUtils.h XmlRpcValue.h
 main.cpp : XmlRpcHttpd.cpp
 .cpp.obj :
-	cl /EHsc -c $<
+	cl /DUNICODE /D_UNICODE /EHsc -c $<
