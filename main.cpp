@@ -140,6 +140,10 @@ int main(int argc, char* argv[]) {
 		for (it = config.begin(); it != config.end(); it++)
 			httpd.mime_types[XmlRpc::string2tstring(it->first)] = XmlRpc::string2tstring(it->second);
 
+		config = configs["request/environments"];
+		for (it = config.begin(); it != config.end(); it++)
+			httpd.request_environments[XmlRpc::string2tstring(it->first)] = XmlRpc::string2tstring(it->second);
+
 	} else {
 #ifdef _WIN32
 	httpd.mime_types[_T("cgi")] = _T("@c:/strawberry/perl/bin/perl.exe");

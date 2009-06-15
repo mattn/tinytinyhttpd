@@ -52,6 +52,7 @@ public:
 	typedef std::map<tstring, tstring> MimeTypes;
 	typedef std::vector<tstring> DefaultPages;
 	typedef std::map<tstring, tstring> RequestAliases;
+	typedef std::map<tstring, tstring> RequestEnvironments;
 
 private:
 	std::map<tstring, XmlRpcFunc> callbacks;
@@ -75,6 +76,7 @@ public:
 	MimeTypes mime_types;
 	DefaultPages default_pages;
 	RequestAliases request_aliases;
+	RequestEnvironments request_environments;
 	XmlRpcLoggerFunc loggerfunc;
 	bool debug_mode;
 

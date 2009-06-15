@@ -1081,6 +1081,13 @@ request_top:
 					env = "GATEWAY_INTERFACE=CGI/1.1";
 					envs.push_back(env);
 
+					XmlRpcHttpd::RequestEnvironments::iterator it_env;
+					for(it_env = httpd->request_environments.begin(); it_env != httpd->request_environments.end(); it_env++) {
+						env = it_env->first + "=";
+						env += it_env->second;
+						envs.push_back(env);
+					}
+
 					if (vparam[0] == "POST") {
 						env = "CONTENT_TYPE=";
 						env += content_type;
