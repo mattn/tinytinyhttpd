@@ -96,12 +96,16 @@ int main(int argc, char* argv[]) {
 #endif
 
 	opterr = 0;
-	while ((c = getopt(argc, (char**)argv, "p:c:d:v") != -1)) {
+	while ((c = getopt(argc, (char**)argv, "p:c:d:vh") != -1)) {
 		switch (optopt) {
 		case 'p': port = (unsigned short)atol(optarg); break;
 		case 'c': cfg = optarg; break;
 		case 'd': root = optarg; break;
 		case 'v': verbose = true; break;
+		case 'h':
+			  std::cerr << "usage: " << argv[0] << " [-v] [-p server-port] [-c config-file] [-d root-dir]" << std::endl;
+			  exit(1);
+			  break;
 		case '?': break;
 		default:
 			argc = 0;
