@@ -828,11 +828,12 @@ request_top:
 				}
 
 				if (res_isdir(path)) {
-					if (path_info.size() && path_info[path_info.size()-1] != '/') {
+					printf("%s\n", path.c_str());
+					if (vparam[1].size() && vparam[1][vparam[1].size()-1] != '/') {
 						res_code = "HTTP/1.1 301 Document Moved";
 						res_body = "Document Moved\n";
 						res_head = "Location: ";
-						res_head += path_info;
+						res_head += vparam[1];
 						res_head += "/\n";
 					} else {
 						res_code = "HTTP/1.1 200 OK";
