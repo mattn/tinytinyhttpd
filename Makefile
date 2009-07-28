@@ -1,9 +1,9 @@
-.SUFFIXES: .cpp .o
+.SUFFIXES: .cxx .o
 
 all : tthttpd
 
-tthttpd : main.o XmlRpcHttpd.o XmlRpcUtils.o
-	gcc -o $@ main.o XmlRpcHttpd.o XmlRpcUtils.o `pkg-config --libs libxml-2.0` -lcurl -lstdc++
+tthttpd : main.o httpd.o utils.o
+	gcc -o $@ main.o httpd.o utils.o -lstdc++ -lpthread
 
-.cpp.o :
-	g++ `pkg-config --cflags libxml-2.0` -c $<
+.cxx.o :
+	g++ -c $<

@@ -1,5 +1,4 @@
-#include "XmlRpcHttpd.h"
-#include <string.h>
+#include "httpd.h"
 #include <string.h>
 
 int  opterr = 1;
@@ -48,7 +47,7 @@ static int getopt(int argc, char** argv, const char* opts) {
 	return(c);
 }
 
-void logFunc(const XmlRpc::XmlRpcHttpd::HttpdInfo* httpd_info, const tstring& request) {
+void logFunc(const tthttpd::server::HttpdInfo* httpd_info, const tthttpd::tstring& request) {
 	printf("%s\n", request.c_str());
 }
 
@@ -86,8 +85,8 @@ ConfigList loadConfigs(const char* filename) {
 
 int main(int argc, char* argv[]) {
 	int c;
-	const char* root = "./public_html";
-	unsigned short port = 80;
+	const char* root = ".";
+	unsigned short port = 8080;
 	const char* cfg = NULL;
 	bool verbose = false;
 
@@ -111,9 +110,9 @@ int main(int argc, char* argv[]) {
 		optarg = NULL;
 	}
 
-	XmlRpc::XmlRpcHttpd httpd(port);
+	tthttpd::server httpd(port);
 	//httpd.loggerfunc = logFunc;
-	httpd.bindRoot(XmlRpc::string2tstring(root));
+	httpd.bindRoot(tthttpd::string2tstring(root));
 	httpd.debug_mode = verbose;
 	if (cfg) {
 		ConfigList configs = loadConfigs(cfg);
@@ -122,11 +121,11 @@ int main(int argc, char* argv[]) {
 		std::string val;
 
 		val = configs["global"]["root"];
-		if (val.size()) httpd.bindRoot(XmlRpc::string2tstring(val));
+		if (val.size()) httpd.bindRoot(tthttpd::string2tstring(val));
 		val = configs["global"]["port"];
 		if (val.size()) httpd.port = atol(val.c_str());
 		val = configs["global"]["indexpages"];
-		if (val.size()) httpd.default_pages = XmlRpc::split_string(XmlRpc::string2tstring(val), _T(","));
+		if (val.size()) httpd.default_pages = tthttpd::split_string(tthttpd::string2tstring(val), _T(","));
 		val = configs["global"]["charset"];
 		if (val.size()) httpd.fs_charset = val;
 		val = configs["global"]["debug"];
@@ -134,15 +133,15 @@ int main(int argc, char* argv[]) {
 
 		config = configs["request/aliases"];
 		for (it = config.begin(); it != config.end(); it++)
-			httpd.request_aliases[XmlRpc::string2tstring(it->first)] = XmlRpc::string2tstring(it->second);
+			httpd.request_aliases[tthttpd::string2tstring(it->first)] = tthttpd::string2tstring(it->second);
 
 		config = configs["mime/types"];
 		for (it = config.begin(); it != config.end(); it++)
-			httpd.mime_types[XmlRpc::string2tstring(it->first)] = XmlRpc::string2tstring(it->second);
+			httpd.mime_types[tthttpd::string2tstring(it->first)] = tthttpd::string2tstring(it->second);
 
 		config = configs["request/environments"];
 		for (it = config.begin(); it != config.end(); it++)
-			httpd.request_environments[XmlRpc::string2tstring(it->first)] = XmlRpc::string2tstring(it->second);
+			httpd.request_environments[tthttpd::string2tstring(it->first)] = tthttpd::string2tstring(it->second);
 
 	} else {
 #ifdef _WIN32

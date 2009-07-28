@@ -1,19 +1,66 @@
-#ifndef _XMLRPCUTIL_H_
-#define _XMLRPCUTIL_H_
+#ifndef _UTILS_H_
+#define _UTILS_H_
 
-#define XMLRPCUTILS_VERSION 0x0100
+#ifdef _MSC_VER
+#include <tchar.h>
+#pragma warning(disable : 4530 4018 4786)
+#pragma comment(lib, "wininet.lib")
+#endif
 
 #include <iostream>
-#include "XmlRpcValue.h"
+#include <vector>
+#include <map>
+#include <string>
+#include <algorithm>
 
-namespace XmlRpc {
+namespace tthttpd {
+
+#ifndef _TSTRDEF
+#ifndef _MSC_VER
+#define _T(x) (x)
+#define _stprintf sprintf
+#define _sntprintf snprintf
+#define _tprintf printf
+#define _tcscpy strcpy
+#define _tcsncpy strncpy
+#define _tcscmp strcmp
+#define _tcsncmp strncmp
+#define _tcschr strchr
+#define _tcsstr strstr
+#define _ttol atol
+#define _tstat stat
+#define _tfopen fopen
+#define _stscanf sscanf
+#define _tcsftime strftime
+#define stricmp strcasecmp
+#define _ftprintf fprintf
+#ifndef SD_BOTH
+# define SD_BOTH SHUT_RDWR
+#endif
+#endif
+
+#ifdef _UNICODE
+typedef std::wstring tstring;
+typedef std::wostream tstream;
+typedef wchar_t tchar;
+#define tcout std::wcout
+#define tcerr std::wcerr
+#else
+typedef std::string tstring;
+typedef std::ostream tstream;
+typedef char tchar;
+#define tcout std::cout
+#define tcerr std::cerr
+#endif
+#define _TSTRDEF
+#endif
 
 #ifdef USE_MLANG
-#define l2u(x) XmlRpc::convert_string(x, _T("char"), _T("utf-8"))
-#define u2l(x) XmlRpc::convert_string(x, _T("utf-8"), _T("char"))
+#define l2u(x) tthttpd::convert_string(x, _T("char"), _T("utf-8"))
+#define u2l(x) tthttpd::convert_string(x, _T("utf-8"), _T("char"))
 #else
-#define l2u(x) XmlRpc::string_to_utf8(x)
-#define u2l(x) XmlRpc::utf8_to_string(x)
+#define l2u(x) tthttpd::string_to_utf8(x)
+#define u2l(x) tthttpd::utf8_to_string(x)
 #endif
 
 #ifdef _WIN32
@@ -49,26 +96,10 @@ tstring& replace_string(tstring& strSrc, tstring strFrom, tstring strTo);
 std::string base64_encode(unsigned char const* bytes_to_encode, unsigned int in_len);
 std::string base64_decode(std::string const& encoded_string);
 std::vector<char> base64_decode_binary(std::string const& encoded_string);
-tstream& operator<<(tstream& os, XmlRpcValue& v);
-bool isFaultResult(tstring& strXml);
-bool isFaultResult(XmlRpcValue& res);
-tstring getMethodFromXml(std::string& strXml);
-XmlRpcValue getXmlRpcValueFromXml(std::string& strXml);
-std::string getXmlFromRequests(tstring method, std::vector<XmlRpcValue>& requests, tstring encoding = _T("utf-8"));
-std::string getXmlFromResponse(XmlRpcValue& response, tstring encoding = _T("utf-8"));
-std::string getXmlFromXmlRpcValue(XmlRpcValue& response, tstring encoding = _T("utf-8"));
-std::string getXmlFromException(XmlRpcException e);
-std::string queryXml(std::string& strXml, std::string query, std::string defaultNs = "");
-int postXmlRpc(tstring url, tstring userid, tstring passwd, tstring method, std::string requestXml, std::string& responseXml, tstring user_agent);
-tstring getFaultStringFromXml(std::string& strXml);
-tstring getFaultResult(XmlRpcValue& res);
-int execXmlRpc(tstring url, tstring method, std::vector<XmlRpcValue>& requests, XmlRpcValue& response, tstring userid = _T(""), tstring passwd = _T(""), tstring encoding = _T("utf-8"), tstring user_agent = _T("XmlRpcClient"));
-XmlRpcValue::ValueBinary loadBinaryFromFile(tstring filename);
-bool saveBinaryToFile(tstring filename, XmlRpcValue::ValueBinary valuebinary);
 std::string urldecode(const std::string& url);
 std::string urlencode(const std::string& url);
 std::string htmldecode(const std::string& html);
 std::string htmlencode(const std::string& html);
 }
 
-#endif /* _XMLRPCUTIL_H_ */
+#endif /* _UTILS_H_ */

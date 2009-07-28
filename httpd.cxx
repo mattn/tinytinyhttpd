@@ -1,4 +1,4 @@
-#include "XmlRpcHttpd.h"
+#include "httpd.h"
 #include <time.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -9,7 +9,7 @@
 #include <wait.h>
 #endif
 
-namespace XmlRpc {
+namespace tthttpd {
 
 #ifdef _WIN32
 typedef int socklen_t;
@@ -116,9 +116,9 @@ bool res_isdir(std::string file) {
 	return (dwAttr != -1 && (dwAttr & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-std::vector<XmlRpcHttpd::ListInfo> res_flist(std::string path) {
+std::vector<server::ListInfo> res_flist(std::string path) {
 	WIN32_FIND_DATAA fData;
-	std::vector<XmlRpcHttpd::ListInfo> ret;
+	std::vector<server::ListInfo> ret;
 	if (path.size() && path[path.size()-1] != '/')
 		path += "/";
 	std::string pattern = path + "*";
@@ -126,7 +126,7 @@ std::vector<XmlRpcHttpd::ListInfo> res_flist(std::string path) {
 
 	do {
 		if (hFind == INVALID_HANDLE_VALUE) break;
-		XmlRpcHttpd::ListInfo listInfo;
+		server::ListInfo listInfo;
 		listInfo.name = fData.cFileName;
 		if (fData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 			listInfo.isdir = true;
@@ -396,15 +396,15 @@ bool res_isdir(std::string file) {
 	return statbuf.st_mode & S_IFDIR;
 }
 
-std::vector<XmlRpcHttpd::ListInfo> res_flist(std::string path) {
-	std::vector<XmlRpcHttpd::ListInfo> ret;
+std::vector<server::ListInfo> res_flist(std::string path) {
+	std::vector<server::ListInfo> ret;
 	DIR* dir;
 	struct dirent* dirp;
 	if (path.size() && path[path.size()-1] != '/')
 		path += "/";
 	dir = opendir(path.c_str());
 	while((dirp = readdir(dir))) {
-		XmlRpcHttpd::ListInfo listInfo;
+		server::ListInfo listInfo;
 		listInfo.name = dirp->d_name;
 		std::string file = path + listInfo.name;
 		if (res_isdir(file)) {
@@ -620,8 +620,8 @@ void* response_thread(void* param)
 	CoInitialize(NULL);
 #endif
 
-	XmlRpcHttpd::HttpdInfo *pHttpdInfo = (XmlRpcHttpd::HttpdInfo*)param;
-	XmlRpcHttpd *httpd = pHttpdInfo->httpd;
+	server::HttpdInfo *pHttpdInfo = (server::HttpdInfo*)param;
+	server *httpd = pHttpdInfo->httpd;
 	int msgsock = (int)pHttpdInfo->msgsock;
 	tstring address = pHttpdInfo->address;
 	std::string str, req, ret;
@@ -748,85 +748,8 @@ request_top:
 //					throw res_code;
 //				}
 			}
-			if (vparam[0] == "POST" && vparam[1] == httpd->target) {
-				if (content_length <= 0) {
-					res_code = "HTTP/1.1 500 Bad Request";
-					res_body = "Bad Request\n";
-					throw res_code;
-				} else {
-					char *data = new char[content_length+1];
-					memset(data, 0, content_length+1);
-					unsigned recv_length = 0;
-					while(recv_length < content_length) {
-						int ret = recv(msgsock, data+recv_length, 1024, 0);
-						if (ret <= 0) {
-							delete[] data;
-							res_code = "HTTP/1.1 500 Bad Request";
-							res_body = "Bad Request\n";
-							throw res_code;
-						}
-						recv_length += ret;
-					}
-					content_length = 0;
-
-					XmlRpcValue response;
-					std::string strXml = data;
-					std::vector<XmlRpcValue> requests;
-					XmlRpcValue req = getXmlRpcValueFromXml(strXml);
-					tstring method = getMethodFromXml(strXml);
-					requests.push_back(req);
-
-					std::vector<tstring> accept_list;
-					if (httpd->accept_auths.count(method))
-						accept_list = httpd->accept_auths[method].accept_list;
-					res_code = "HTTP/1.1 200 OK";
-					try {
-						if (vauth.size() > 0 && accept_list.size() > 0 && std::find(accept_list.begin(), accept_list.end(), vauth[0]) == accept_list.end()) {
-							res_head = "WWW-Authenticate: Basic realm=\"Authorization Required\"\r\n";
-							throw XmlRpcException(3, _T("Permission Denied"));
-						}
-
-						if (httpd->dispatchXmlRpcFunc(method, requests, response)) {
-							res_body = getXmlFromResponse(response);
-							res_type = "text/xml; charset=utf-8";
-						} else {
-							res_code = "HTTP/1.1 500 Bad Request";
-							res_body = "Bad Request\n";
-							throw res_code;
-						}
-					}
-					catch(XmlRpcException e) {
-						res_code = "HTTP/1.1 200 Bad Request";
-						res_body = getXmlFromException(e);
-						throw res_code;
-					}
-					catch(...) {
-						res_code = "HTTP/1.1 500 Bad Request";
-						res_body = "Bad Request\n";
-						throw res_code;
-					}
-				}
-			} else
-			if  (httpd->root.size() == 0) {
-				sprintf(buf,
-					"<table border=1 width=300>\n"
-					"<tr><th>Module</th><th>Version</td></th>\n"
-					"<tr><td>XmlRpcValue</td><td align=right>0x%04x</td></tr>\n"
-					"<tr><td>XmlRpcUtils</td><td align=right>0x%04x</td></tr>\n"
-					"<tr><td>XmlRpcHttpd</td><td align=right>0x%04x</td></tr>\n"
-					"</table>\n",
-					XMLRPCVALUE_VERSION,
-					XMLRPCUTILS_VERSION,
-					XMLRPCHTTPD_VERSION);
-				res_code = "HTTP/1.1 200 OK";
-				res_body = "<html><head><title>XmlRpcHttpd</title></head><body><h1><u>This is a XmlRpcHttpd page.</u></h1>\n";
-				res_body += buf;
-				res_body += "Requested from ";
-				res_body += tstring2string(address);
-				res_body += "</body></html>";
-			} else
 			if (vparam[0] == "GET" || vparam[0] == "POST" || vparam[0] == "HEAD") {
-				std::string root = XmlRpcHttpd::get_realpath(httpd->root + "/");
+				std::string root = server::get_realpath(httpd->root + "/");
 				std::string request_uri = vparam[1];
 				std::string script_name = vparam[1];
 				std::string query_string;
@@ -839,7 +762,7 @@ request_top:
 					path_info = script_name;
 				}
 
-				XmlRpcHttpd::RequestAliases::iterator it_alias;
+				server::RequestAliases::iterator it_alias;
 				for(it_alias = httpd->request_aliases.begin(); it_alias != httpd->request_aliases.end(); it_alias++) {
 					if (path_info == it_alias->first) {
 						vparam[1] = it_alias->second;
@@ -847,7 +770,7 @@ request_top:
 					}
 				}
 
-				std::string path = XmlRpcHttpd::get_realpath(root + XmlRpc::urldecode(vparam[1]));
+				std::string path = server::get_realpath(root + tthttpd::urldecode(vparam[1]));
 				if (strncmp(root.c_str(), path.c_str(), root.size())) {
 					res_code = "HTTP/1.1 500 Bad Request";
 					res_body = "Bad Request\n";
@@ -855,7 +778,7 @@ request_top:
 				}
 
 				if (vauth.size() > 0) {
-					XmlRpcHttpd::AcceptAuths::iterator it_auth;
+					server::AcceptAuths::iterator it_auth;
 					for(it_auth = httpd->accept_auths.begin(); it_auth != httpd->accept_auths.end(); it_auth++) {
 						if (!strncmp(it_auth->first.c_str(), script_name.c_str(), it_auth->first.size())) {
 							if (std::find(it_auth->second.accept_list.begin(), it_auth->second.accept_list.end(), vauth[0]) == it_auth->second.accept_list.end()) {
@@ -868,7 +791,7 @@ request_top:
 					}
 				}
 
-				XmlRpcHttpd::DefaultPages::iterator it_page;
+				server::DefaultPages::iterator it_page;
 				for(it_page = httpd->default_pages.begin(); it_page != httpd->default_pages.end(); it_page++) {
 					std::string try_path = path + "/" + tstring2string(*it_page);
 					res_info = res_fopen(try_path);
@@ -878,7 +801,7 @@ request_top:
 					}
 				}
 
-				XmlRpcHttpd::MimeTypes::iterator it_mime;
+				server::MimeTypes::iterator it_mime;
 				std::string type;
 				tstring dot = _T(".");
 				for(it_mime = httpd->mime_types.begin(); it_mime != httpd->mime_types.end(); it_mime++) {
@@ -921,11 +844,11 @@ request_top:
 						res_body += script_name;
 						res_body += "</h1><hr>";
 						res_body += "<table border=0>";
-						std::vector<XmlRpcHttpd::ListInfo> flist = res_flist(path);
-						std::vector<XmlRpcHttpd::ListInfo>::iterator it;
+						std::vector<server::ListInfo> flist = res_flist(path);
+						std::vector<server::ListInfo>::iterator it;
 						for(it = flist.begin(); it != flist.end(); it++) {
 							res_body += "<tr><td><a href=\"";
-							res_body += XmlRpc::urlencode(it->name);
+							res_body += tthttpd::urlencode(it->name);
 							res_body += "\">";
 							res_body += it->name;
 							res_body += "</a></td><td align=right>&nbsp;&nbsp;";
@@ -1081,7 +1004,7 @@ request_top:
 					env = "GATEWAY_INTERFACE=CGI/1.1";
 					envs.push_back(env);
 
-					XmlRpcHttpd::RequestEnvironments::iterator it_env;
+					server::RequestEnvironments::iterator it_env;
 					for(it_env = httpd->request_environments.begin(); it_env != httpd->request_environments.end(); it_env++) {
 						env = it_env->first + "=";
 						env += it_env->second;
@@ -1118,10 +1041,6 @@ request_top:
 				throw res_code;
 			}
 		}
-	}
-	catch(XmlRpcException e) {
-		res_code = "HTTP/1.1 200 Bad Request";
-		res_body = getXmlFromException(e);
 	}
 	catch(...) {
 		if (res_code.size() == 0) {
@@ -1265,7 +1184,7 @@ request_end:
 void* watch_thread(void* param)
 {
 
-	XmlRpcHttpd *httpd = (XmlRpcHttpd*)param;
+	server *httpd = (server*)param;
 	int msgsock;
 	struct sockaddr_in server;
 
@@ -1325,7 +1244,7 @@ void* watch_thread(void* param)
 		else {
 			std::string address = inet_ntoa(client.sin_addr);
 
-			XmlRpcHttpd::HttpdInfo *pHttpdInfo = new XmlRpcHttpd::HttpdInfo;
+			server::HttpdInfo *pHttpdInfo = new server::HttpdInfo;
 			pHttpdInfo->msgsock = msgsock;
 			pHttpdInfo->httpd = httpd;
 			pHttpdInfo->address = string2tstring(address);
@@ -1341,15 +1260,7 @@ void* watch_thread(void* param)
 	return NULL;
 }
 
-bool XmlRpcHttpd::dispatchXmlRpcFunc(tstring name, std::vector<XmlRpcValue>& requests, XmlRpcValue& response) {
-	response.clear();
-	XmlRpcFunc func = callbacks[name];
-	if (!func) return false;
-	response = func(requests);
-	return true;
-}
-
-bool XmlRpcHttpd::start() {
+bool server::start() {
 	if (thread)
 		return false;
 #ifdef _WIN32
@@ -1360,13 +1271,13 @@ bool XmlRpcHttpd::start() {
 	return thread ? true : false;
 }
 
-bool XmlRpcHttpd::stop() {
+bool server::stop() {
 	closesocket(sock);
 	wait();
 	return true;
 }
 
-bool XmlRpcHttpd::wait() {
+bool server::wait() {
 #ifdef _WIN32
 	WaitForSingleObject(thread, INFINITE);
 #else

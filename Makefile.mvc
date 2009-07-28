@@ -1,12 +1,12 @@
-.SUFFIXES: .cpp .obj
+.SUFFIXES: .cxx .obj
 
 all : tthttpd.exe
 
-tthttpd.exe : main.obj XmlRpcHttpd.obj XmlRpcUtils.obj
-	link /out:$@ main.obj XmlRpcHttpd.obj XmlRpcUtils.obj libxml2.lib libcurl_imp.lib libiconv.lib ole32.lib
+tthttpd.exe : main.obj httpd.obj utils.obj
+	link /out:$@ main.obj httpd.obj utils.obj libiconv.lib pthread.lib
 
-XmlRpcHttpd.cpp : XmlRpcHttpd.h XmlRpcUtils.h XmlRpcValue.h
-XmlRpcUtils.cpp : XmlRpcUtils.h XmlRpcValue.h
-main.cpp : XmlRpcHttpd.cpp
-.cpp.obj :
+httpd.cxx : httpd.h utils.h
+utils.cxx : utils.h
+main.cxx : httpd.cxx
+.cxx.obj :
 	cl /DUNICODE /D_UNICODE /EHsc -c $<

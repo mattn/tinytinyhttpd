@@ -1,7 +1,7 @@
-#ifndef _XMLRPCHTTPD_H_
-#define _XMLRPCHTTPD_H_
+#ifndef _HTTPD_H_
+#define _HTTPD_H_
 
-#define XMLRPCHTTPD_VERSION 0x0100
+#define HTTPD_VERSION 0x0100
 
 #pragma warning(disable:4018 4503 4530 4786)
 #define _CRT_SECURE_NO_WARNINGS
@@ -23,11 +23,11 @@
 #endif
 #include <sstream>
 
-#include "XmlRpcUtils.h"
+#include "utils.h"
 
-namespace XmlRpc {
+namespace tthttpd {
 
-class XmlRpcHttpd {
+class server {
 public:
 	typedef struct {
 		std::string name;
@@ -37,7 +37,7 @@ public:
 	} ListInfo;
 	typedef struct {
 		int msgsock;
-		XmlRpcHttpd *httpd;
+		server *httpd;
 		tstring address;
 	} HttpdInfo;
 	typedef std::map<tstring, tstring> BasicAuths;
@@ -47,15 +47,13 @@ public:
 	typedef std::map<tstring, AcceptAuth> AcceptAuths;
 	typedef std::vector<tstring> AcceptIPs;
 
-	typedef XmlRpcValue (*XmlRpcFunc)(const std::vector<XmlRpcValue>& requests);
-	typedef void (*XmlRpcLoggerFunc)(const HttpdInfo* httpd_info, const tstring& request);
+	typedef void (*LoggerFunc)(const HttpdInfo* httpd_info, const tstring& request);
 	typedef std::map<tstring, tstring> MimeTypes;
 	typedef std::vector<tstring> DefaultPages;
 	typedef std::map<tstring, tstring> RequestAliases;
 	typedef std::map<tstring, tstring> RequestEnvironments;
 
 private:
-	std::map<tstring, XmlRpcFunc> callbacks;
 #ifdef _WIN32
 	HANDLE thread;
 #else
@@ -77,7 +75,7 @@ public:
 	DefaultPages default_pages;
 	RequestAliases request_aliases;
 	RequestEnvironments request_environments;
-	XmlRpcLoggerFunc loggerfunc;
+	LoggerFunc loggerfunc;
 	bool debug_mode;
 
 	void initialize() {
@@ -102,19 +100,19 @@ public:
 		debug_mode = false;
 	};
 
-	XmlRpcHttpd() {
+	server() {
 		initialize();
 	}
-	XmlRpcHttpd(unsigned short _port) {
+	server(unsigned short _port) {
 		initialize();
 		port = _port;
 	}
-	XmlRpcHttpd(unsigned short _port, tstring _target) {
+	server(unsigned short _port, tstring _target) {
 		initialize();
 		port = _port;
 		target = tstring2string(_target);
 	}
-	~XmlRpcHttpd() {
+	~server() {
 		stop();
 	}
 	bool start();
@@ -126,18 +124,6 @@ public:
 	tstring get_fs_charset() {
 		return string2tstring(fs_charset);
 	}
-	void registerXmlRpcFunc(tstring name, XmlRpcFunc func) {
-		callbacks[name] = func;
-		accept_auths.erase(name);
-	}
-	void registerXmlRpcFunc(tstring name, XmlRpcFunc func, std::vector<tstring> _accept_auth) {
-		callbacks[name] = func;
-		accept_auths[name].accept_list = _accept_auth;
-	}
-	void unregisterXmlRpcFunc(tstring name) {
-		callbacks.erase(name);
-	}
-	bool dispatchXmlRpcFunc(tstring name, std::vector<XmlRpcValue>& requests, XmlRpcValue& response);
 	void setAuthentication(BasicAuths _basic_auths) {
 		basic_auths = _basic_auths;
 	}
@@ -182,10 +168,6 @@ public:
 	}
 };
 
-void registerXmlRpcFunc(tstring name, XmlRpcHttpd::XmlRpcFunc func);
-void unregisterXmlRpcFunc(tstring name);
-bool dispatchXmlRpcFunc(tstring name, std::vector<XmlRpcValue>& requests, XmlRpcValue& response);
-
 }
 
-#endif /* _XMLRPCHTTPD_H_ */
+#endif /* _HTTPD_H_ */

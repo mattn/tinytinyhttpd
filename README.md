@@ -9,8 +9,6 @@ WHAT IS THIS:
 REQUIRES:
 ---------
 
-* libxml2
-* curl
 * libiconv
 
 AUTHOR:
