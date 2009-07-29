@@ -32,6 +32,14 @@ typedef struct {
 #endif
 } RES_INFO;
 
+bool operator<(const server::ListInfo& left, const server::ListInfo& right) {
+  return left.name < right.name;
+}
+
+bool operator>(const server::ListInfo& left, const server::ListInfo& right) {
+  return left.name > right.name;
+}
+
 std::string res_curtime(int diff = 0) {
 	const char * const months[]={
 		"Jan",
@@ -153,6 +161,7 @@ std::vector<server::ListInfo> res_flist(std::string path) {
 		ret.push_back(listInfo);
 	} while(FindNextFileA(hFind, &fData));
 	if (hFind != INVALID_HANDLE_VALUE) FindClose(hFind);
+	sort(ret.begin(), ret.end());
 	return ret;
 }
 
@@ -421,6 +430,7 @@ std::vector<server::ListInfo> res_flist(std::string path) {
 		ret.push_back(listInfo);
 	}
 	closedir(dir);
+	sort(ret.begin(), ret.end());
 	return ret;
 }
 
@@ -842,7 +852,7 @@ request_top:
 						res_body += script_name;
 						res_body += "</title></head><body><h1>";
 						res_body += script_name;
-						res_body += "</h1><hr>";
+						res_body += "</h1><hr />";
 						res_body += "<table border=0>";
 						std::vector<server::ListInfo> flist = res_flist(path);
 						std::vector<server::ListInfo>::iterator it;
@@ -859,7 +869,7 @@ request_top:
 								res_body += "[DIR]";
 							res_body += "</td></tr>";
 						}
-						res_body += "</table><hr></body></html>";
+						res_body += "</table><hr /></body></html>";
 					}
 					throw res_code;
 				}
@@ -1043,8 +1053,8 @@ request_top:
 		}
 	}
 	catch(...) {
-		if (VERBOSE(1)) my_perror(_T(" cached exception"));
 		if (res_code.size() == 0) {
+			if (VERBOSE(1)) my_perror(_T(" cached exception"));
 			res_code = "HTTP/1.1 500 Bad Request";
 			res_body = "Internal Server Error\n";
 		}
