@@ -11,6 +11,11 @@ REQUIRES:
 
 * libiconv
 
+LICENSE:
+-------
+
+	BSD
+
 AUTHOR:
 -------
 
@@ -28,7 +33,7 @@ or
 	port=8080
 	root=/path/to/contents
 	indexpages=index.html,index.php
-	charset=cp932
+	charset=utf-8
 
 	[mime/types]
 	cgi=@/usr/bin/perl
