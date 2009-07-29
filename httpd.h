@@ -64,7 +64,6 @@ public:
 	int sock;
 	std::string hostname;
 	std::string hostaddr;
-	std::string target;
 	std::string root;
 	std::string fs_charset;
 	unsigned short port;
@@ -76,12 +75,11 @@ public:
 	RequestAliases request_aliases;
 	RequestEnvironments request_environments;
 	LoggerFunc loggerfunc;
-	bool debug_mode;
+	int verbose_mode;
 
 	void initialize() {
 		sock = -1;
 		port = 80;
-		target = "/RPC2";
 		fs_charset = "utf-8";
 		thread = 0;
 		loggerfunc = NULL;
@@ -97,7 +95,7 @@ public:
 		default_pages.push_back(_T("index.html"));
 		default_pages.push_back(_T("index.php"));
 		default_pages.push_back(_T("index.cgi"));
-		debug_mode = false;
+		verbose_mode = 0;
 	};
 
 	server() {
@@ -110,7 +108,6 @@ public:
 	server(unsigned short _port, tstring _target) {
 		initialize();
 		port = _port;
-		target = tstring2string(_target);
 	}
 	~server() {
 		stop();

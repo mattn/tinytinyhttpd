@@ -18,6 +18,8 @@ typedef int socklen_t;
 #define strnicmp(x, y, z) strncasecmp(x, y, z)
 #endif
 
+#define VERBOSE(x) (httpd->verbose_mode >= x)
+
 typedef struct {
 #ifdef _WIN32
 	HANDLE read;
@@ -616,10 +618,6 @@ static std::string get_line(int fd)
 
 void* response_thread(void* param)
 {
-#ifdef _MSC_VER
-	CoInitialize(NULL);
-#endif
-
 	server::HttpdInfo *pHttpdInfo = (server::HttpdInfo*)param;
 	server *httpd = pHttpdInfo->httpd;
 	int msgsock = (int)pHttpdInfo->msgsock;
@@ -668,9 +666,12 @@ request_top:
 		goto request_end;
 	}
 	str = req;
+	if (VERBOSE(1)) printf("* %s\n", str.c_str());
+
 	while(str.size()) {
 		str = get_line(msgsock);
 		if (str == "") break;
+		if (VERBOSE(2)) printf("  %s\n", str.c_str());
 
 		key = "connection:";
 		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
@@ -711,7 +712,6 @@ request_top:
 		}
 	}
 
-	if (httpd->debug_mode) printf("* %s\n", req.c_str());
 	if (httpd->loggerfunc) {
 		tstring treq = string2tstring(req);
 		httpd->loggerfunc(pHttpdInfo, treq);
@@ -828,7 +828,6 @@ request_top:
 				}
 
 				if (res_isdir(path)) {
-					printf("%s\n", path.c_str());
 					if (vparam[1].size() && vparam[1][vparam[1].size()-1] != '/') {
 						res_code = "HTTP/1.1 301 Document Moved";
 						res_body = "Document Moved\n";
@@ -1044,8 +1043,8 @@ request_top:
 		}
 	}
 	catch(...) {
+		if (VERBOSE(1)) my_perror(_T(" cached exception"));
 		if (res_code.size() == 0) {
-			if (httpd->debug_mode) my_perror(_T("debug"));
 			res_code = "HTTP/1.1 500 Bad Request";
 			res_body = "Internal Server Error\n";
 		}
@@ -1083,7 +1082,7 @@ request_top:
 				res_code = "";
 				break;
 			}
-			if (httpd->debug_mode) printf("  %s\n", str.c_str());
+			if (VERBOSE(2)) printf("  %s\n", str.c_str());
 			key = "connection:";
 			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
 				http_connection = trim_string(str.c_str() + key.size());
@@ -1176,9 +1175,6 @@ request_end:
 	shutdown(msgsock, SD_BOTH);
 	closesocket(msgsock);
 
-#ifdef _MSC_VER
-	CoUninitialize();
-#endif
 	return NULL;
 }
 
@@ -1194,7 +1190,7 @@ void* watch_thread(void* param)
 #endif
 	httpd->sock = socket(PF_INET, SOCK_STREAM, 0);
 	if (httpd->sock < 0) { 
-		if (httpd->debug_mode) my_perror("socket");
+		my_perror("socket");
 		return NULL;
 	}
 	int optval = 1;
@@ -1206,12 +1202,12 @@ void* watch_thread(void* param)
 	server.sin_port = htons(httpd->port);
 
 	if (bind(httpd->sock, (struct sockaddr *)&server, sizeof server) < 0) {
-		if (httpd->debug_mode) my_perror("bind");
+		my_perror("bind");
 		return NULL;
 	}
 
 	if (listen(httpd->sock, SOMAXCONN) < 0) {
-		if (httpd->debug_mode) my_perror("listen");
+		my_perror("listen");
 		return NULL;
 	}
 
@@ -1229,6 +1225,7 @@ void* watch_thread(void* param)
 		httpd->hostaddr = hostbuf;
 	}
 
+	if (VERBOSE(1)) printf("server started\n");
 	for(;;) {
 		struct sockaddr_in client;
 		int client_len = sizeof(client);

@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
 	const char* root = ".";
 	unsigned short port = 8080;
 	const char* cfg = NULL;
-	bool verbose = false;
+	int verbose = 0;
 
 #ifdef _WIN32
 	WSADATA wsaData;
@@ -101,7 +101,7 @@ int main(int argc, char* argv[]) {
 		case 'p': port = (unsigned short)atol(optarg); break;
 		case 'c': cfg = optarg; break;
 		case 'd': root = optarg; break;
-		case 'v': verbose = true; break;
+		case 'v': verbose++; break;
 		case 'h':
 			  std::cerr << "usage: " << argv[0] << " [-v] [-p server-port] [-c config-file] [-d root-dir]" << std::endl;
 			  exit(1);
@@ -117,7 +117,7 @@ int main(int argc, char* argv[]) {
 	tthttpd::server httpd(port);
 	//httpd.loggerfunc = logFunc;
 	httpd.bindRoot(tthttpd::string2tstring(root));
-	httpd.debug_mode = verbose;
+	httpd.verbose_mode = verbose;
 	if (cfg) {
 		ConfigList configs = loadConfigs(cfg);
 		Config config;
@@ -133,7 +133,8 @@ int main(int argc, char* argv[]) {
 		val = configs["global"]["charset"];
 		if (val.size()) httpd.fs_charset = val;
 		val = configs["global"]["debug"];
-		if (val == "on") httpd.debug_mode = true;
+		if (val == "on") httpd.verbose_mode = 1;
+		else if (val.size()) httpd.verbose_mode = atol(val.c_str());
 
 		config = configs["request/aliases"];
 		for (it = config.begin(); it != config.end(); it++)
