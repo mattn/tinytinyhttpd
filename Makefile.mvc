@@ -3,7 +3,7 @@
 all : tthttpd.exe
 
 tthttpd.exe : main.obj httpd.obj utils.obj
-	link /out:$@ main.obj httpd.obj utils.obj iconv.lib
+	link /out:$@ main.obj httpd.obj utils.obj
 
 httpd.cxx : httpd.h utils.h
 utils.cxx : utils.h

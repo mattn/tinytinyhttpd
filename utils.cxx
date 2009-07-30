@@ -22,7 +22,9 @@
  */
 #define _CRT_SECURE_NO_DEPRECATE
 #include <curl/curl.h>
+#ifdef HAVE_ICONV
 #include <iconv.h>
+#endif
 #include <errno.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -508,6 +510,7 @@ tstring utf8_to_string(tstring str) {
 }
 #endif
 
+#ifdef HAVE_ICONV
 std::string convert_string(const std::string str, const std::string from_codeset, const std::string to_codeset) {
 	char *dest = NULL;
 	iconv_t cd;
@@ -599,6 +602,7 @@ out:
 
 	return dest;
 }
+#endif
 
 std::string cut_string(std::string str, int cells, std::string padding) {
 	char* ptr = (char*)str.c_str();

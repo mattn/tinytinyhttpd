@@ -6,11 +6,6 @@ WHAT IS THIS:
 
 	tiny tiny httpd writen in C.
 
-REQUIRES:
----------
-
-* libiconv
-
 LICENSE:
 -------
 
