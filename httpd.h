@@ -25,8 +25,11 @@
 
 #define HTTPD_VERSION 0x0100
 
+#ifdef _WIN32
 #pragma warning(disable:4018 4503 4530 4786)
 #define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include <sys/types.h>
 #ifdef _WIN32
 #include <winsock2.h>

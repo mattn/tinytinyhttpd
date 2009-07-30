@@ -405,7 +405,7 @@ std::string string_to_utf8(std::string str) {
 	size_t mbssize = strlen(ptr);
 	size_t wcssize = mbssize;
 	wchar_t* pszStrWC = new wchar_t[wcssize + 1];
-	int n = 0, clen = 0, len = 0;
+	size_t n = 0, clen = 0, len = 0;
 	mblen(NULL, 0);
 	while(len < mbssize) {
 		clen = mblen(ptr, MB_CUR_MAX);
@@ -469,7 +469,7 @@ std::string utf8_to_string(std::string str) {
 	size_t mbssize = strlen(ptr);
 	size_t wcssize = mbssize;
 	wchar_t* pszStrWC = new wchar_t[wcssize + 1];
-	int n = 0, clen = 0, len = 0;
+	size_t n = 0, clen = 0, len = 0;
 	while(len < mbssize) {
 		int c = utf_bytes2char((unsigned char*)ptr);
 		if (c == 0x301c) c = 0xff5e;
@@ -605,12 +605,11 @@ std::string cut_string(std::string str, int cells, std::string padding) {
 	size_t mbssize = strlen(ptr);
 	size_t wcssize = mbssize;
 	wchar_t* pszStrWC = new wchar_t[wcssize + 1];
-	int n = 0;
+	size_t n = 0, clen = 0, len = 0;
 #ifdef _WIN32
 	n = MultiByteToWideChar(GetACP(), 0, ptr, mbssize, pszStrWC, wcssize + 1);
 	pszStrWC[n] = 0;
 #else
-	int clen = 0, len = 0;
 	mblen(NULL, 0);
 	while(len < mbssize) {
 		clen = mblen(ptr, MB_CUR_MAX);
@@ -630,7 +629,6 @@ std::string cut_string(std::string str, int cells, std::string padding) {
 #endif
 	wcssize = n;
 	int width = 0;
-	int padpos = 0;
 	for(n = 0; n < wcssize; n++) {
 		int c = wcwidth_cjk(pszStrWC[n]);
 		if (width + c > cells) {
@@ -670,12 +668,11 @@ std::string cut_string_r(std::string str, int cells, std::string padding) {
 	size_t mbssize = strlen(ptr);
 	size_t wcssize = mbssize;
 	wchar_t* pszStrWC = new wchar_t[wcssize + 1];
-	int n = 0;
+	size_t n = 0, clen = 0, len = 0;
 #ifdef _WIN32
 	n = MultiByteToWideChar(GetACP(), 0, ptr, mbssize, pszStrWC, wcssize + 1);
 	pszStrWC[n] = 0;
 #else
-	int clen = 0, len = 0;
 	mblen(NULL, 0);
 	while(len < mbssize) {
 		clen = mblen(ptr, MB_CUR_MAX);
@@ -695,7 +692,6 @@ std::string cut_string_r(std::string str, int cells, std::string padding) {
 #endif
 	wcssize = n;
 	int width = 0;
-	int padpos = 0;
 	for(n = wcssize-1; n >= 0; n--) {
 		int c = wcwidth_cjk(pszStrWC[n]);
 		if (width + c > cells) {
@@ -735,8 +731,8 @@ std::vector<std::string> split_string(std::string strSrc, std::string strKey) {
 	std::vector<std::string> vecLines;
 	std::string strTmp = strSrc;
 
-	int iIndex = 0;
-	while (iIndex < (int)strTmp.length()) {
+	size_t iIndex = 0;
+	while (iIndex < strTmp.length()) {
 		int iOldIndex = iIndex;
 		iIndex = strTmp.find(strKey, iIndex);
 		if(iIndex != std::string::npos) {
@@ -950,7 +946,7 @@ std::vector<char> base64_decode_binary(std::string const& encoded_string) {
 std::string urldecode(const std::string& url) {
 	std::ostringstream rets;
 	std::string hexstr;
-	for(int n = 0; n < url.size(); n++) {
+	for(size_t n = 0; n < url.size(); n++) {
 		switch(url[n]) {
 		case '+':
 			rets << ' ';
@@ -977,7 +973,7 @@ std::string urldecode(const std::string& url) {
 
 std::string urlencode(const std::string& url) {
 	std::ostringstream rets;
-	for(int n = 0; n < url.size(); n++) { 
+	for(size_t n = 0; n < url.size(); n++) { 
 		unsigned char c = (unsigned char)url[n];
 		if (isalnum(c) || c == '_' || c == '.' || c == '/' )
 			rets << c;

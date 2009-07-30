@@ -489,8 +489,8 @@ std::string res_ftime(std::string file, int diff = 0) {
 		"Thu",
 		"Fri",
 		"Sat"};
-	int	offset;
 	struct tm* p=gmtime(&tt);
+	//int	offset;
 	//int offset= -(int)timezone;
 	//offset = offset/60/60*100 + (offset/60)%60;
 
@@ -540,7 +540,7 @@ void res_popen_sigchild(int signo) {
 }
 
 RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs) {
-    int filedesr[2], filedesw[2], err;
+    int filedesr[2], filedesw[2];
     pid_t child;
     long flags;
     sigset_t newmask;
@@ -618,6 +618,7 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 		res_info->process = child;
 		return res_info;
     }
+	return NULL;
 }
 
 void res_close(RES_INFO* res_info) {
