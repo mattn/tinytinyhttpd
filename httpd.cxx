@@ -146,7 +146,7 @@ RES_INFO* res_fopen(std::string file) {
 
 bool res_isdir(std::string file) {
 	DWORD dwAttr = GetFileAttributesA(file.c_str());
-	return (dwAttr != -1 && (dwAttr & FILE_ATTRIBUTE_DIRECTORY));
+	return (dwAttr != (DWORD)-1 && (dwAttr & FILE_ATTRIBUTE_DIRECTORY));
 }
 
 std::vector<server::ListInfo> res_flist(std::string path) {
@@ -1170,7 +1170,11 @@ request_top:
 		send(msgsock, ret.c_str(), (int)ret.size(), 0);
 
 		ret = res_body;
-		sprintf(length, "%d", ret.size());
+#ifdef _WIN32
+		sprintf(length, "%u", ret.size());
+#else
+		sprintf(length, "%z", ret.size());
+#endif
 		ret = "Content-Length: ";
 		ret += length;
 		ret += "\r\n";

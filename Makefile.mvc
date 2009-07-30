@@ -9,4 +9,7 @@ httpd.cxx : httpd.h utils.h
 utils.cxx : utils.h
 main.cxx : httpd.cxx
 .cxx.obj :
-	cl /UUNICODE /U_UNICODE /EHsc -c $<
+	cl /W3 /UUNICODE /U_UNICODE /EHsc -c $<
+
+clean :
+	del /S *.obj tthttpd.exe

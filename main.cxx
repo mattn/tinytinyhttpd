@@ -127,7 +127,7 @@ int main(int argc, char* argv[]) {
 		val = configs["global"]["root"];
 		if (val.size()) httpd.bindRoot(tthttpd::string2tstring(val));
 		val = configs["global"]["port"];
-		if (val.size()) httpd.port = atol(val.c_str());
+		if (val.size()) httpd.port = (unsigned short)atoi(val.c_str());
 		val = configs["global"]["indexpages"];
 		if (val.size()) httpd.default_pages = tthttpd::split_string(tthttpd::string2tstring(val), _T(","));
 		val = configs["global"]["charset"];

@@ -21,6 +21,9 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #define _CRT_SECURE_NO_DEPRECATE
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #ifdef HAVE_ICONV
 #include <iconv.h>
 #endif
@@ -608,11 +611,12 @@ std::string cut_string(std::string str, int cells, std::string padding) {
 	size_t mbssize = strlen(ptr);
 	size_t wcssize = mbssize;
 	wchar_t* pszStrWC = new wchar_t[wcssize + 1];
-	size_t n = 0, clen = 0, len = 0;
+	size_t n = 0;
 #ifdef _WIN32
 	n = MultiByteToWideChar(GetACP(), 0, ptr, mbssize, pszStrWC, wcssize + 1);
 	pszStrWC[n] = 0;
 #else
+	size_t clen = 0, len = 0;
 	mblen(NULL, 0);
 	while(len < mbssize) {
 		clen = mblen(ptr, MB_CUR_MAX);
@@ -671,11 +675,12 @@ std::string cut_string_r(std::string str, int cells, std::string padding) {
 	size_t mbssize = strlen(ptr);
 	size_t wcssize = mbssize;
 	wchar_t* pszStrWC = new wchar_t[wcssize + 1];
-	size_t n = 0, clen = 0, len = 0;
+	size_t n = 0;
 #ifdef _WIN32
 	n = MultiByteToWideChar(GetACP(), 0, ptr, mbssize, pszStrWC, wcssize + 1);
 	pszStrWC[n] = 0;
 #else
+	size_t clen = 0, len = 0;
 	mblen(NULL, 0);
 	while(len < mbssize) {
 		clen = mblen(ptr, MB_CUR_MAX);

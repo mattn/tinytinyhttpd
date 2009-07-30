@@ -25,8 +25,9 @@
 
 #define HTTPD_VERSION 0x0100
 
-#ifdef _WIN32
-#pragma warning(disable:4018 4503 4530 4786)
+#ifdef _MSC_VER
+#pragma warning(disable:4018 4503 4530 4786 4996)
+#pragma comment(lib, "ws2_32.lib")
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
@@ -36,7 +37,6 @@
 #include <process.h>
 #include <direct.h>
 #include <io.h>
-#pragma comment(lib, "ws2_32.lib")
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
