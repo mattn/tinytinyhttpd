@@ -21,7 +21,6 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #define _CRT_SECURE_NO_DEPRECATE
-#include <curl/curl.h>
 #ifdef HAVE_ICONV
 #include <iconv.h>
 #endif
