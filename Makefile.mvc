@@ -3,10 +3,10 @@
 all : tthttpd.exe
 
 tthttpd.exe : main.obj httpd.obj utils.obj
-	link /out:$@ main.obj httpd.obj utils.obj libiconv.lib pthread.lib
+	link /out:$@ main.obj httpd.obj utils.obj iconv.lib
 
 httpd.cxx : httpd.h utils.h
 utils.cxx : utils.h
 main.cxx : httpd.cxx
 .cxx.obj :
-	cl /DUNICODE /D_UNICODE /EHsc -c $<
+	cl /UUNICODE /U_UNICODE /EHsc -c $<
