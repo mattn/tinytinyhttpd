@@ -45,6 +45,10 @@
 #endif
 #include <sstream>
 
+#ifndef _WIN32
+#include <pthread.h>
+#endif
+
 #include "utils.h"
 
 namespace tthttpd {

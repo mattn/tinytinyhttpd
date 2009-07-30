@@ -28,7 +28,8 @@
 #ifndef _WIN32
 #include <signal.h>
 #include <dirent.h>
-#include <wait.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #endif
 
 namespace tthttpd {
