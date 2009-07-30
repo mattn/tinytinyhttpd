@@ -1259,7 +1259,7 @@ void* watch_thread(void* param)
 		httpd->hostaddr = hostbuf;
 	}
 
-	if (VERBOSE(1)) printf("server started\n");
+	if (VERBOSE(1)) printf("server started http://%s:%d/\n", hostbuf, httpd->port);
 	for(;;) {
 		struct sockaddr_in client;
 		int client_len = sizeof(client);
