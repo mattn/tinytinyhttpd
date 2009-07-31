@@ -1297,6 +1297,7 @@ void* watch_thread(void* param)
 }
 
 bool server::start() {
+	set_priv(user.c_str(), chroot.c_str(), "tthttpd");
 	if (thread)
 		return false;
 #ifdef _WIN32

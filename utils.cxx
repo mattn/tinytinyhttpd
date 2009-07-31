@@ -31,6 +31,11 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#ifndef _WIN32
+#include <unistd.h>
+#include <sys/types.h>
+#include <pwd.h>
+#endif
 
 #include "utils.h"
 #include <sstream>
@@ -1009,5 +1014,58 @@ const std::string html_decode(const std::string& html) {
 	replace_string(ret, "&nbsp;", " ");
 	replace_string(ret, "&amp;", "&");
 	return ret;
+}
+
+void
+set_priv(const char *chuser_name, const char *chroot_dir, const char *title)
+{
+	struct passwd *pw;
+
+	if (chuser_name[0] == '\0' || chroot_dir[0] == '\0')
+		return;
+
+	if ((pw = getpwnam(chuser_name)) == NULL) {
+		fprintf(stderr, "failed to get user \"%s\"\n", chuser_name);
+		fflush(stderr);
+		exit(255);
+	}
+	if (chroot(chroot_dir) != 0) {
+		fprintf(stderr, "can't chroot %s\n", chroot_dir);
+		fflush(stderr);
+		exit(255);
+	}
+	if (chdir("/") != 0) {
+		fprintf(stderr, "can't change directory '/'\n");
+		fflush(stderr);
+		exit(255);
+	}
+
+	if (title != NULL)
+		setproctitle("%s [%s]", pw->pw_name, title);
+
+	/*
+	 * Drop privileges and clear the group access list
+	 */
+	if (setgroups(1, &pw->pw_gid) == -1 ||
+#if defined(HAVE_SETRESUID) && !defined(BROKEN_SETRESUID)
+	    setresgid(pw->pw_gid, pw->pw_gid, pw->pw_gid) == -1 ||
+	    setresuid(pw->pw_uid, pw->pw_uid, pw->pw_uid) == -1
+#elif defined(HAVE_SETREUID) && !defined(BROKEN_SETREUID)
+	    setregid(pw->pw_gid, pw->pw_gid, pw->pw_gid) == -1 ||
+	    setreuid(pw->pw_uid, pw->pw_uid, pw->pw_uid) == -1
+#else
+# ifndef SETEUID_BREAKS_SETUID
+	    setegid(pw->pw_gid) == -1 ||
+	    seteuid(pw->pw_uid) == -1
+# else
+	    setgid(pw->pw_gid) == -1 ||
+	    setuid(pw->pw_uid) == -1
+# endif
+#endif
+	   ) {
+		fprintf(stderr, "can't drop privileges\n");
+		fflush(stderr);
+		exit(255);
+	}
 }
 }

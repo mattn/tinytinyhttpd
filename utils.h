@@ -122,6 +122,8 @@ std::string urldecode(const std::string& url);
 std::string urlencode(const std::string& url);
 std::string htmldecode(const std::string& html);
 std::string htmlencode(const std::string& html);
+
+void set_priv(const char *, const char *, const char *);
 }
 
 #endif /* _UTILS_H_ */

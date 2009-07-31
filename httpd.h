@@ -95,6 +95,8 @@ public:
 	std::string hostaddr;
 	std::string root;
 	std::string fs_charset;
+	std::string chroot;
+	std::string user;
 	unsigned short port;
 	BasicAuths basic_auths;
 	AcceptAuths accept_auths;

@@ -132,6 +132,10 @@ int main(int argc, char* argv[]) {
 		if (val.size()) httpd.default_pages = tthttpd::split_string(tthttpd::string2tstring(val), _T(","));
 		val = configs["global"]["charset"];
 		if (val.size()) httpd.fs_charset = val;
+		val = configs["global"]["chroot"];
+		if (val.size()) httpd.chroot = val;
+		val = configs["global"]["user"];
+		if (val.size()) httpd.user = val;
 		val = configs["global"]["debug"];
 		if (val == "on") httpd.verbose_mode = 1;
 		else if (val.size()) httpd.verbose_mode = atol(val.c_str());
