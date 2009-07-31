@@ -1017,8 +1017,8 @@ const std::string html_decode(const std::string& html) {
 }
 
 void
-set_priv(const char *chuser_name, const char *chroot_dir, const char *title)
-{
+set_priv(const char *chuser_name, const char *chroot_dir, const char *title) {
+#ifndef _WIN32
 	struct passwd *pw;
 
 	if (chuser_name[0] == '\0' || chroot_dir[0] == '\0')
@@ -1067,5 +1067,10 @@ set_priv(const char *chuser_name, const char *chroot_dir, const char *title)
 		fflush(stderr);
 		exit(255);
 	}
+#else
+	fprintf(stderr, "win32 does not support set_priv()\n");
+	fflush(stderr);
+	exit(255);
+#endif
 }
 }
