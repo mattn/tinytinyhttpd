@@ -19,6 +19,9 @@ AUTHOR:
 HOW TO DO:
 ----------
 
+	# ./tthttpd -vvv
+	server started http://127.0.1.1:8080/
+
 	# ./tthttpd -p 8080 -d path-to-root
 
 or
