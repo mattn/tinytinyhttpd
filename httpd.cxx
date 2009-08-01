@@ -1227,7 +1227,6 @@ void* watch_thread(void* param)
 	gethostname(hostbuf, sizeof(hostbuf));
 	httpd->hostname = hostbuf;
 	struct hostent* hostent = gethostbyname(hostbuf);
-	std::string hostip;
 	if (hostent) {
 		sprintf(hostbuf, "%d.%d.%d.%d",
 			(unsigned char)*(hostent->h_addr_list[0]),
