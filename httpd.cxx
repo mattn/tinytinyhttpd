@@ -804,7 +804,7 @@ request_top:
 					}
 				}
 
-				std::string path = server::get_realpath(root + tthttpd::urldecode(vparam[1]));
+				std::string path = server::get_realpath(root + tthttpd::url_decode(vparam[1]));
 				if (strncmp(root.c_str(), path.c_str(), root.size())) {
 					res_code = "HTTP/1.1 500 Bad Request";
 					res_body = "Bad Request\n";
@@ -882,7 +882,7 @@ request_top:
 						std::vector<server::ListInfo>::iterator it;
 						for(it = flist.begin(); it != flist.end(); it++) {
 							res_body += "<tr><td><a href=\"";
-							res_body += tthttpd::urlencode(it->name);
+							res_body += tthttpd::url_encode(it->name);
 							res_body += "\">";
 							res_body += it->name;
 							res_body += "</a></td><td align=right>&nbsp;&nbsp;";
@@ -1170,11 +1170,7 @@ request_top:
 		send(msgsock, ret.c_str(), (int)ret.size(), 0);
 
 		ret = res_body;
-#ifdef _WIN32
 		sprintf(length, "%u", ret.size());
-#else
-		sprintf(length, "%z", ret.size());
-#endif
 		ret = "Content-Length: ";
 		ret += length;
 		ret += "\r\n";

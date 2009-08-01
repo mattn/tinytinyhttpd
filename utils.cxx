@@ -35,6 +35,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <grp.h>
 #endif
 
 #include "utils.h"
@@ -956,7 +957,7 @@ std::vector<char> base64_decode_binary(std::string const& encoded_string) {
 	return ret;
 }
 
-std::string urldecode(const std::string& url) {
+std::string url_decode(const std::string& url) {
 	std::ostringstream rets;
 	std::string hexstr;
 	for(size_t n = 0; n < url.size(); n++) {
@@ -984,7 +985,7 @@ std::string urldecode(const std::string& url) {
 	return rets.str();
 }
 
-std::string urlencode(const std::string& url) {
+std::string url_encode(const std::string& url) {
 	std::ostringstream rets;
 	for(size_t n = 0; n < url.size(); n++) { 
 		unsigned char c = (unsigned char)url[n];
@@ -999,7 +1000,7 @@ std::string urlencode(const std::string& url) {
 	return rets.str();
 }
 
-const std::string html_encode(const std::string& html) {
+std::string html_encode(const std::string& html) {
 	std::string ret = html;
 	replace_string(ret, "&", "&amp;");
 	replace_string(ret, "<", "&lt;");
@@ -1007,7 +1008,7 @@ const std::string html_encode(const std::string& html) {
 	return ret;
 }
 
-const std::string html_decode(const std::string& html) {
+std::string html_decode(const std::string& html) {
 	std::string ret = html;
 	replace_string(ret, "&gt;", ">");
 	replace_string(ret, "&lt;", "<");
@@ -1040,8 +1041,10 @@ set_priv(const char *chuser_name, const char *chroot_dir, const char *title) {
 		exit(255);
 	}
 
+#ifdef HAVE_SETPROCTITLE
 	if (title != NULL)
 		setproctitle("%s [%s]", pw->pw_name, title);
+#endif
 
 	/*
 	 * Drop privileges and clear the group access list

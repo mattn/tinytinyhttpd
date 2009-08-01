@@ -118,10 +118,10 @@ tstring& replace_string(tstring& strSrc, tstring strFrom, tstring strTo);
 std::string base64_encode(unsigned char const* bytes_to_encode, unsigned int in_len);
 std::string base64_decode(std::string const& encoded_string);
 std::vector<char> base64_decode_binary(std::string const& encoded_string);
-std::string urldecode(const std::string& url);
-std::string urlencode(const std::string& url);
-std::string htmldecode(const std::string& html);
-std::string htmlencode(const std::string& html);
+std::string url_decode(const std::string& url);
+std::string url_encode(const std::string& url);
+std::string html_decode(const std::string& html);
+std::string html_encode(const std::string& html);
 
 void set_priv(const char *, const char *, const char *);
 }
