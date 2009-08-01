@@ -29,6 +29,7 @@ or
 	root=/path/to/contents
 	indexpages=index.html,index.php
 	charset=utf-8
+	spawnexec=on
 
 	[mime/types]
 	cgi=@/usr/bin/perl
