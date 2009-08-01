@@ -63,28 +63,29 @@ bool operator>(const server::ListInfo& left, const server::ListInfo& right) {
   return left.name > right.name;
 }
 
+const char * const months[]={
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec"};
+const char * const wdays[]={
+	"Sun",
+	"Mon",
+	"Tue",
+	"Wed",
+	"Thu",
+	"Fri",
+	"Sat"};
+
 std::string res_curtime(int diff = 0) {
-	const char * const months[]={
-		"Jan",
-		"Feb",
-		"Mar",
-		"Apr",
-		"May",
-		"Jun",
-		"Jul",
-		"Aug",
-		"Sep",
-		"Oct",
-		"Nov",
-		"Dec"};
-	const char * const wdays[]={
-		"Sun",
-		"Mon",
-		"Tue",
-		"Wed",
-		"Thu",
-		"Fri",
-		"Sat"};
 	time_t tt = time(NULL) + diff;
 	struct tm* p = gmtime(&tt);
 
@@ -147,6 +148,12 @@ RES_INFO* res_fopen(std::string file) {
 bool res_isdir(std::string file) {
 	DWORD dwAttr = GetFileAttributesA(file.c_str());
 	return (dwAttr != (DWORD)-1 && (dwAttr & FILE_ATTRIBUTE_DIRECTORY));
+}
+
+bool res_isexe(std::string& file) {
+	if (!stricmp(file.c_str()+file.size()-4, ".exe"))
+		return true;
+	return false;
 }
 
 std::vector<server::ListInfo> res_flist(std::string path) {
@@ -218,28 +225,6 @@ std::string res_ftime(std::string file, int diff = 0) {
 	t.tm_sec = systemtime.wSecond;
 	t.tm_isdst = 0;
 	time_t tt = mktime(&t) + diff;
-
-	const char * const months[]={
-		"Jan",
-		"Feb",
-		"Mar",
-		"Apr",
-		"May",
-		"Jun",
-		"Jul",
-		"Aug",
-		"Sep",
-		"Oct",
-		"Nov",
-		"Dec"};
-	const char * const wdays[]={
-		"Sun",
-		"Mon",
-		"Tue",
-		"Wed",
-		"Thu",
-		"Fri",
-		"Sat"};
 	struct tm* p = localtime(&tt);
 	//int offset= -(int)timezone;
 	//offset = offset/60/60*100 + (offset/60)%60;
@@ -430,6 +415,13 @@ bool res_isdir(std::string file) {
 	return statbuf.st_mode & S_IFDIR;
 }
 
+bool res_isexe(std::string& file) {
+    struct stat	st;
+    if (stat((char *)file.c_str(), &st))
+		return false;
+    return S_ISREG(st.st_mode);
+}
+
 std::vector<server::ListInfo> res_flist(std::string path) {
 	std::vector<server::ListInfo> ret;
 	DIR* dir;
@@ -467,28 +459,6 @@ std::string res_ftime(std::string file, int diff = 0) {
 	struct stat statbuf = {0};
 	stat(file.c_str(), &statbuf);
 	time_t tt = statbuf.st_mtime + diff;
-
-	const char * const months[]={
-		"Jan",
-		"Feb",
-		"Mar",
-		"Apr",
-		"May",
-		"Jun",
-		"Jul",
-		"Aug",
-		"Sep",
-		"Oct",
-		"Nov",
-		"Dec"};
-	const char * const wdays[]={
-		"Sun",
-		"Mon",
-		"Tue",
-		"Wed",
-		"Thu",
-		"Fri",
-		"Sat"};
 	struct tm* p=gmtime(&tt);
 	//int	offset;
 	//int offset= -(int)timezone;
@@ -585,7 +555,7 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 		sigaddset(&newmask, SIGKILL);
 		pthread_sigmask(SIG_UNBLOCK, &newmask, 0L);
 		usleep(500);
-		std::string path = args[1];
+		std::string path = args.size() > 1 ? args[1] : args[0];
 		int end_pos = path.find_last_of('/');
 		if (end_pos)
 			path.erase(end_pos);
@@ -838,27 +808,31 @@ request_top:
 				server::MimeTypes::iterator it_mime;
 				std::string type;
 				tstring dot = _T(".");
-				for(it_mime = httpd->mime_types.begin(); it_mime != httpd->mime_types.end(); it_mime++) {
-					tstring tpath = string2tstring(path);
-					tstring match = dot + it_mime->first;
-					if (!_tcscmp(tpath.c_str()+tpath.size()-match.size(), match.c_str())) {
-						type = tstring2string(it_mime->second);
-						res_type = type;
-					}
-					if (it_mime->second[0] == '@') {
-						match += _T("/");
-						tchar *tptr = (tchar*)_tcsstr(tpath.c_str(), match.c_str());
-						if (tptr) {
+				if (httpd->spawn_executable && res_isexe(path)) {
+					type = "@";
+				} else {
+					for(it_mime = httpd->mime_types.begin(); it_mime != httpd->mime_types.end(); it_mime++) {
+						tstring tpath = string2tstring(path);
+						tstring match = dot + it_mime->first;
+						if (!_tcscmp(tpath.c_str()+tpath.size()-match.size(), match.c_str())) {
 							type = tstring2string(it_mime->second);
 							res_type = type;
-							path_info = tptr + match.size() - 1;
-							path.resize(path.size() - path_info.size());
-							script_name.resize(script_name.size() - path_info.size());
-						} else {
-							path_info = "";
 						}
+						if (it_mime->second[0] == '@') {
+							match += _T("/");
+							tchar *tptr = (tchar*)_tcsstr(tpath.c_str(), match.c_str());
+							if (tptr) {
+								type = tstring2string(it_mime->second);
+								res_type = type;
+								path_info = tptr + match.size() - 1;
+								path.resize(path.size() - path_info.size());
+								script_name.resize(script_name.size() - path_info.size());
+							} else {
+								path_info = "";
+							}
+						}
+						if (type.size()) break;
 					}
-					if (type.size()) break;
 				}
 
 				if (res_isdir(path)) {
@@ -949,8 +923,12 @@ request_top:
 					std::vector<std::string> envs;
 					std::vector<std::string> args;
 
-					args.push_back(type.substr(1));
-					args.push_back(path);
+					if (type.size() == 1) {
+						args.push_back(path);
+					} else {
+						args.push_back(type.substr(1));
+						args.push_back(path);
+					}
 					if (query_string.size())
 						args.push_back(query_string);
 

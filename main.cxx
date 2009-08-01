@@ -139,6 +139,8 @@ int main(int argc, char* argv[]) {
 		val = configs["global"]["debug"];
 		if (val == "on") httpd.verbose_mode = 1;
 		else if (val.size()) httpd.verbose_mode = atol(val.c_str());
+		val = configs["global"]["spawnexec"];
+		if (val == "on") httpd.spawn_executable = true;
 
 		config = configs["request/aliases"];
 		for (it = config.begin(); it != config.end(); it++)

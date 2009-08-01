@@ -106,6 +106,7 @@ public:
 	RequestAliases request_aliases;
 	RequestEnvironments request_environments;
 	LoggerFunc loggerfunc;
+	bool spawn_executable;
 	int verbose_mode;
 
 	void initialize() {
@@ -126,6 +127,7 @@ public:
 		default_pages.push_back(_T("index.html"));
 		default_pages.push_back(_T("index.php"));
 		default_pages.push_back(_T("index.cgi"));
+		spawn_executable = false;
 		verbose_mode = 0;
 	};
 
