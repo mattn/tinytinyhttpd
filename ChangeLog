@@ -1,0 +1,8 @@
+2009-08-02: version 0.0.2
+
+	* fixed bug that couldn't treat PATH_INFO when using spawn exec.
+
+2009-08-01: version 0.0.1
+
+	* first release.
+
