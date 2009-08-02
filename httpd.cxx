@@ -150,9 +150,20 @@ bool res_isdir(std::string file) {
 	return (dwAttr != (DWORD)-1 && (dwAttr & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-bool res_isexe(std::string& file) {
-	if (!stricmp(file.c_str()+file.size()-4, ".exe"))
-		return true;
+bool res_isexe(std::string& file, std::string& path_info) {
+	std::vector<std::string> split_path = split_string(file, "/");
+	std::string path = "";
+	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
+		if (it->empty()) continue;
+		if (!path.empty()) path += "/";
+		path += *it;
+    	struct stat	st;
+		if (stat((char *)(path + ".exe").c_str(), &st) == 0) {
+			path_info = file.c_str() + path.size();
+			file = (path + ".exe");
+			return true;
+		}
+	}
 	return false;
 }
 
@@ -354,7 +365,7 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 		ptr += it->size() + 1;
 	}
 
-	std::string path = args[1];
+	std::string path = args.size() > 1 ? args[1] : args[0];
 	size_t end_pos = path.find_last_of('/');
 	if (end_pos != std::string::npos) path.erase(end_pos);
 
@@ -371,6 +382,7 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 			&pi);
 	delete envs_ptr;
 	if(!bRet) {
+		my_perror(_T("CreateProcessA"));
 		CloseHandle(hClientIn_rd);
 		CloseHandle(hClientOut_wr);
 		return NULL;
@@ -415,12 +427,23 @@ bool res_isdir(std::string file) {
 	return statbuf.st_mode & S_IFDIR;
 }
 
-bool res_isexe(std::string& file) {
-    struct stat	st;
-    if (stat((char *)file.c_str(), &st))
-		return false;
-	printf("%d\n", S_ISREG(st.st_mode) && access(file.c_str(), X_OK));
-    return S_ISREG(st.st_mode) && access(file.c_str(), X_OK) == 0;
+bool res_isexe(std::string& file, std::string& path_info) {
+	std::vector<std::string> split_path = split_string(file, "/");
+	std::string path = "";
+	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
+		if (it->empty()) continue;
+		path += "/";
+		path += *it;
+    	struct stat	st;
+		if (stat((char *)path.c_str(), &st))
+			continue;
+    	if (S_ISREG(st.st_mode) && access(path.c_str(), X_OK) == 0) {
+			path_info = file.c_str() + path.size();
+			file = path;
+			return true;
+		}
+	}
+	return false;
 }
 
 std::vector<server::ListInfo> res_flist(std::string path) {
@@ -808,10 +831,10 @@ request_top:
 
 				server::MimeTypes::iterator it_mime;
 				std::string type;
-				tstring dot = _T(".");
-				if (httpd->spawn_executable && res_isexe(path)) {
+				if (httpd->spawn_executable && res_isexe(path, path_info)) {
 					type = "@";
 				} else {
+					tstring dot = _T(".");
 					for(it_mime = httpd->mime_types.begin(); it_mime != httpd->mime_types.end(); it_mime++) {
 						tstring tpath = string2tstring(path);
 						tstring match = dot + it_mime->first;

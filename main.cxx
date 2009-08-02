@@ -88,6 +88,7 @@ int main(int argc, char* argv[]) {
 	const char* root = ".";
 	unsigned short port = 8080;
 	const char* cfg = NULL;
+	bool spawn_exec = false;
 	int verbose = 0;
 
 #ifdef _WIN32
@@ -96,12 +97,13 @@ int main(int argc, char* argv[]) {
 #endif
 
 	opterr = 0;
-	while ((c = getopt(argc, (char**)argv, "p:c:d:vh") != -1)) {
+	while ((c = getopt(argc, (char**)argv, "p:c:d:xvh") != -1)) {
 		switch (optopt) {
 		case 'p': port = (unsigned short)atol(optarg); break;
 		case 'c': cfg = optarg; break;
 		case 'd': root = optarg; break;
 		case 'v': verbose++; break;
+		case 'x': spawn_exec = true; break;
 		case 'h':
 			  std::cerr << "usage: " << argv[0] << " [-v] [-p server-port] [-c config-file] [-d root-dir]" << std::endl;
 			  exit(1);
@@ -117,6 +119,7 @@ int main(int argc, char* argv[]) {
 	tthttpd::server httpd(port);
 	//httpd.loggerfunc = logFunc;
 	httpd.bindRoot(tthttpd::string2tstring(root));
+	httpd.spawn_executable = spawn_exec;
 	httpd.verbose_mode = verbose;
 	if (cfg) {
 		ConfigList configs = loadConfigs(cfg);
