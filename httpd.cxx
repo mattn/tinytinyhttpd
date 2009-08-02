@@ -419,7 +419,8 @@ bool res_isexe(std::string& file) {
     struct stat	st;
     if (stat((char *)file.c_str(), &st))
 		return false;
-    return S_ISREG(st.st_mode);
+	printf("%d\n", S_ISREG(st.st_mode) && access(file.c_str(), X_OK));
+    return S_ISREG(st.st_mode) && access(file.c_str(), X_OK) == 0;
 }
 
 std::vector<server::ListInfo> res_flist(std::string path) {
