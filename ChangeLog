@@ -1,6 +1,7 @@
 2009-08-04: version 0.0.4
 
 	* fixed spawn exec behavior.
+	* fixed redirection when URL include '..'.
 
 2009-08-03: version 0.0.3
 
