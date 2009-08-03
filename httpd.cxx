@@ -158,9 +158,18 @@ bool res_isexe(std::string& file, std::string& path_info) {
 		if (!path.empty()) path += "/";
 		path += *it;
     	struct stat	st;
-		if (stat((char *)(path + ".exe").c_str(), &st) == 0) {
+		stat((char *)path.c_str(), &st);
+		if (S_ISREG(st.st_mode) && stat((char *)path.c_str(), &st) == 0 &&
+				path.substr(path.size() - 4) == ".exe") {
 			path_info = file.c_str() + path.size();
-			file = (path + ".exe");
+			file = path;
+			return true;
+		}
+		std::string tmp = path + ".exe";
+		stat((char *)tmp.c_str(), &st);
+		if (S_ISREG(st.st_mode) && stat((char *)tmp.c_str(), &st) == 0) {
+			path_info = file.c_str() + path.size();
+			file = tmp;
 			return true;
 		}
 	}
