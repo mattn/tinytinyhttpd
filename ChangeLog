@@ -1,3 +1,7 @@
+2009-08-04: version 0.0.4
+
+	* fixed spawn exec behavior.
+
 2009-08-03: version 0.0.3
 
 	* fixed bug that set broken directory for spawn exec.
