@@ -41,6 +41,10 @@ typedef int socklen_t;
 #define strnicmp(x, y, z) strncasecmp(x, y, z)
 #endif
 
+#ifndef S_ISREG
+#define S_ISREG(x) (x & S_IFREG)
+#endif
+
 #define VERBOSE(x) (httpd->verbose_mode >= x)
 
 typedef struct {
