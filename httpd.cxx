@@ -359,7 +359,7 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 
 	for(it = args.begin(), n = 0; it != args.end(); it++, n++) {
 		if (it != args.begin()) command += " ";
-		if (n == 1) {
+		if (n == 1 && args[1].at(0) == '/') {
 			std::string path = args[1];
 			size_t end_pos = path.find_last_of('/');
 			if (end_pos != std::string::npos) path.erase(0, end_pos + 1);
@@ -378,7 +378,8 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 		ptr += it->size() + 1;
 	}
 
-	std::string path = args.size() > 1 ? args[1] : args[0];
+	std::string path = args.size() > 1 && args[1].at(0) == '/' ?
+		args[1] : args[0];
 	size_t end_pos = path.find_last_of('/');
 	if (end_pos != std::string::npos) path.erase(end_pos);
 
@@ -560,7 +561,7 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 	envs_ptr = new char*[envs.size() + 1];
 
 	for(n = 0, it = args.begin(); it != args.end(); n++, it++) {
-		if (n == 1) {
+		if (n == 1 && args[1].at(0) == '/') {
 			std::string path = args[1];
 			size_t end_pos = path.find_last_of('/');
 			if (end_pos != std::string::npos)
@@ -592,7 +593,8 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 		sigaddset(&newmask, SIGKILL);
 		pthread_sigmask(SIG_UNBLOCK, &newmask, 0L);
 		usleep(500);
-		std::string path = args.size() > 1 ? args[1] : args[0];
+		std::string path = args.size() > 1 && args[1].at(0) == '/' ?
+			args[1] : args[0];
 		int end_pos = path.find_last_of('/');
 		if (end_pos)
 			path.erase(end_pos);
@@ -880,6 +882,7 @@ request_top:
 						res_head += vparam[1];
 						res_head += "/\n";
 					} else {
+					if (VERBOSE(2)) printf("  listing %s\n", path.c_str());
 						res_code = "HTTP/1.1 200 OK";
 						res_type = "text/html; charset=";
 						res_type += trim_string(httpd->fs_charset);
