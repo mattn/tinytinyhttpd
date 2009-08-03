@@ -154,7 +154,7 @@ bool res_isdir(std::string file) {
 	return (dwAttr != (DWORD)-1 && (dwAttr & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-bool res_isexe(std::string& file, std::string& path_info) {
+bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
 	std::vector<std::string> split_path = split_string(file, "/");
 	std::string path = "";
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
@@ -166,6 +166,7 @@ bool res_isexe(std::string& file, std::string& path_info) {
 		if (S_ISREG(st.st_mode) && stat((char *)path.c_str(), &st) == 0 &&
 				path.substr(path.size() - 4) == ".exe") {
 			path_info = file.c_str() + path.size();
+			script_name.resize(script_name.size() - path_info.size());
 			file = path;
 			return true;
 		}
@@ -173,6 +174,7 @@ bool res_isexe(std::string& file, std::string& path_info) {
 		stat((char *)tmp.c_str(), &st);
 		if (S_ISREG(st.st_mode) && stat((char *)tmp.c_str(), &st) == 0) {
 			path_info = file.c_str() + path.size();
+			script_name.resize(script_name.size() - path_info.size());
 			file = tmp;
 			return true;
 		}
@@ -441,7 +443,7 @@ bool res_isdir(std::string file) {
 	return statbuf.st_mode & S_IFDIR;
 }
 
-bool res_isexe(std::string& file, std::string& path_info) {
+bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
 	std::vector<std::string> split_path = split_string(file, "/");
 	std::string path = "";
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
@@ -453,6 +455,7 @@ bool res_isexe(std::string& file, std::string& path_info) {
 			continue;
     	if (S_ISREG(st.st_mode) && access(path.c_str(), X_OK) == 0) {
 			path_info = file.c_str() + path.size();
+			script_name.resize(script_name.size() - path_info.size());
 			file = path;
 			return true;
 		}
@@ -561,7 +564,7 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 	envs_ptr = new char*[envs.size() + 1];
 
 	for(n = 0, it = args.begin(); it != args.end(); n++, it++) {
-		if (n == 1 && args[1].at(0) == '/') {
+		if (n == 1 && args.size() > 1 && args[1].size() > 0 && args[1].at(0) == '/') {
 			std::string path = args[1];
 			size_t end_pos = path.find_last_of('/');
 			if (end_pos != std::string::npos)
@@ -846,7 +849,7 @@ request_top:
 
 				server::MimeTypes::iterator it_mime;
 				std::string type;
-				if (httpd->spawn_executable && res_isexe(path, path_info)) {
+				if (httpd->spawn_executable && res_isexe(path, path_info, script_name)) {
 					type = "@";
 				} else {
 					tstring dot = _T(".");
@@ -965,7 +968,6 @@ request_top:
 
 					if (type.size() == 1) {
 						args.push_back(path);
-						args.push_back("");
 					} else {
 						args.push_back(type.substr(1));
 						args.push_back(path);
