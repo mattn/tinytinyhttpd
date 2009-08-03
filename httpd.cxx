@@ -965,6 +965,7 @@ request_top:
 
 					if (type.size() == 1) {
 						args.push_back(path);
+						args.push_back("");
 					} else {
 						args.push_back(type.substr(1));
 						args.push_back(path);

@@ -1,3 +1,7 @@
+2009-08-03: version 0.0.3
+
+	* fixed bug that set broken directory for spawn exec.
+
 2009-08-02: version 0.0.2
 
 	* fixed bug that couldn't treat PATH_INFO when using spawn exec.
