@@ -816,7 +816,17 @@ request_top:
 					}
 				}
 
-				std::string path = server::get_realpath(root + tthttpd::url_decode(vparam[1]));
+				std::string before = root + tthttpd::url_decode(vparam[1]);
+				std::string path = server::get_realpath(before);
+				if (before != path) {
+					path = path.c_str() + root.size();
+					res_code = "HTTP/1.1 301 Document Moved";
+					res_body = "Document Moved\n";
+					res_head = "Location: ";
+					res_head += path;
+					res_head += "\n";
+					throw res_code;
+				}
 				if (strncmp(root.c_str(), path.c_str(), root.size())) {
 					res_code = "HTTP/1.1 500 Bad Request";
 					res_body = "Bad Request\n";
