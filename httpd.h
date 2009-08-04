@@ -158,9 +158,10 @@ public:
 		basic_auths = _basic_auths;
 	}
 	void bindRoot(std::string _root) {
-		root = get_realpath(_root);
+		root = get_realpath(_root + "/");
 	}
-	static std::string get_realpath(std::string path) {
+	static std::string get_realpath(std::string abspath) {
+		std::string path = abspath;
 #ifdef _WIN32
 		char fullpath[_MAX_PATH] = {0};
 		char* filepart = NULL;
@@ -192,7 +193,7 @@ public:
 			if (it+1 != path_sep.end())
 				path_real += "/";
 		}
-		if (path[path.size()-1] == '/')
+		if (abspath[abspath.size()-1] == '/')
 			path_real += "/";
 		return path_real;
 	}

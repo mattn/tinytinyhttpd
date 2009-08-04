@@ -817,7 +817,8 @@ request_top:
 				before += tthttpd::url_decode(script_name);
 				std::string path = server::get_realpath(before);
 				if (before != path) {
-					path = path.c_str() + root.size() - 1;
+					printf("foo! %s, %s\n", path.c_str(), before.c_str());
+					path = path.c_str() + root.size();
 					res_code = "HTTP/1.1 301 Document Moved";
 					res_body = "Document Moved\n";
 					res_head = "Location: ";
