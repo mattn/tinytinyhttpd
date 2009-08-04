@@ -89,7 +89,23 @@ const char * const wdays[]={
 	"Fri",
 	"Sat"};
 
-std::string res_curtime(int diff = 0) {
+static bool filetime2unixtime(const FILETIME* ft, struct tm* tm) {
+    FILETIME lt;
+    SYSTEMTIME st;
+
+    if (!FileTimeToLocalFileTime(ft, &lt)) return false;
+    if (!FileTimeToSystemTime(&lt, &st)) return false;
+    memset(tm, 0, sizeof(tm));
+    tm->tm_year = st.wYear - 1900;
+    tm->tm_mon = st.wMonth - 1;
+    tm->tm_mday = st.wDay;
+    tm->tm_hour = st.wHour;
+    tm->tm_min = st.wMinute;
+    tm->tm_sec = st.wSecond;
+    return true;
+}
+
+static std::string res_curtime(int diff = 0) {
 	time_t tt = time(NULL) + diff;
 	struct tm* p = gmtime(&tt);
 
@@ -105,7 +121,7 @@ std::string res_curtime(int diff = 0) {
 	return buf;
 }
 
-void my_perror(std::string mes) {
+static void my_perror(std::string mes) {
 #ifdef _WIN32
 	void*	pMsgBuf;
 	FormatMessageA(
@@ -129,7 +145,7 @@ void my_perror(std::string mes) {
 }
 
 #ifdef _WIN32
-RES_INFO* res_fopen(std::string file) {
+static RES_INFO* res_fopen(std::string file) {
 	HANDLE hFile;
 	hFile = CreateFileA(
 		file.c_str(),
@@ -149,12 +165,12 @@ RES_INFO* res_fopen(std::string file) {
 	return res_info;
 }
 
-bool res_isdir(std::string file) {
+static bool res_isdir(std::string file) {
 	DWORD dwAttr = GetFileAttributesA(file.c_str());
 	return (dwAttr != (DWORD)-1 && (dwAttr & FILE_ATTRIBUTE_DIRECTORY));
 }
 
-bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
+static bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
 	std::vector<std::string> split_path = split_string(file, "/");
 	std::string path = "";
 	std::string pathext = getenv("PATHEXT");
@@ -195,7 +211,7 @@ bool res_isexe(std::string& file, std::string& path_info, std::string& script_na
 	return false;
 }
 
-std::vector<server::ListInfo> res_flist(std::string path) {
+static std::vector<server::ListInfo> res_flist(std::string path) {
 	WIN32_FIND_DATAA fData;
 	std::vector<server::ListInfo> ret;
 	if (path.size() && path[path.size()-1] != '/')
@@ -207,26 +223,10 @@ std::vector<server::ListInfo> res_flist(std::string path) {
 		if (hFind == INVALID_HANDLE_VALUE) break;
 		server::ListInfo listInfo;
 		listInfo.name = fData.cFileName;
-		if (fData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-			listInfo.isdir = true;
-			listInfo.size = 0;
-		} else {
-			listInfo.isdir = false;
-			std::string file = path + listInfo.name;
-			HANDLE hFile = CreateFileA(
-				file.c_str(),
-				GENERIC_READ,
-				FILE_SHARE_READ,
-				NULL,
-				OPEN_EXISTING,
-				FILE_ATTRIBUTE_NORMAL,
-				NULL);
-			if (hFile != INVALID_HANDLE_VALUE) {
-				listInfo.size = GetFileSize(hFile, NULL);
-				CloseHandle(hFile);
-			} else
-				listInfo.size = (size_t)-1;
-		}
+		listInfo.isdir = (fData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			? true : false;
+		listInfo.size = fData.nFileSizeLow;
+		filetime2unixtime(&fData.ftLastWriteTime, &listInfo.date);
 		ret.push_back(listInfo);
 	} while(FindNextFileA(hFind, &fData));
 	if (hFind != INVALID_HANDLE_VALUE) FindClose(hFind);
@@ -234,11 +234,11 @@ std::vector<server::ListInfo> res_flist(std::string path) {
 	return ret;
 }
 
-unsigned long res_fsize(RES_INFO* res_info) {
+static unsigned long res_fsize(RES_INFO* res_info) {
 	return GetFileSize(res_info->read, NULL);
 }
 
-std::string res_ftime(std::string file, int diff = 0) {
+static std::string res_ftime(std::string file, int diff = 0) {
 	HANDLE hFile;
 	hFile = CreateFileA(
 		file.c_str(),
@@ -289,7 +289,7 @@ std::string res_ftime(std::string file, int diff = 0) {
 	return buf;
 }
 
-std::string res_fgets(RES_INFO* res_info) {
+static std::string res_fgets(RES_INFO* res_info) {
 	std::string ret;
 	while(true) {
 		DWORD dwRead;
@@ -301,20 +301,20 @@ std::string res_fgets(RES_INFO* res_info) {
 	return ret;
 }
 
-unsigned long res_write(RES_INFO* res_info, char* data, unsigned long size) {
+static unsigned long res_write(RES_INFO* res_info, char* data, unsigned long size) {
 	DWORD dwWrite = 0;
 	WriteFile(res_info->write, data, size, &dwWrite, NULL);
 	return dwWrite;
 }
 
-unsigned long res_read(RES_INFO* res_info, char* data, unsigned long size) {
+static unsigned long res_read(RES_INFO* res_info, char* data, unsigned long size) {
 	DWORD dwRead;
 	if (ReadFile(res_info->read, data, size, &dwRead, NULL) == FALSE)
 		return 0;
 	return dwRead;
 }
 
-RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs) {
+static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs) {
 	int envs_len = 1;
 	int n;
 	char *envs_ptr;
@@ -429,7 +429,7 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 	return res_info;
 }
 
-void res_close(RES_INFO* res_info) {
+static void res_close(RES_INFO* res_info) {
 	if (res_info) {
 		if (res_info->read) CloseHandle(res_info->read);
 		if (res_info->write) CloseHandle(res_info->write);
@@ -438,7 +438,7 @@ void res_close(RES_INFO* res_info) {
 	}
 }
 #else
-RES_INFO* res_fopen(std::string file) {
+static RES_INFO* res_fopen(std::string file) {
 	FILE* fp = fopen(file.c_str(), "rb");
 	if (!fp)
 		return NULL;
@@ -450,13 +450,13 @@ RES_INFO* res_fopen(std::string file) {
 	return res_info;
 }
 
-bool res_isdir(std::string file) {
+static bool res_isdir(std::string file) {
 	struct stat statbuf = {0};
 	stat(file.c_str(), &statbuf);
 	return statbuf.st_mode & S_IFDIR;
 }
 
-bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
+static bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
 	std::vector<std::string> split_path = split_string(file, "/");
 	std::string path = "";
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
@@ -477,7 +477,7 @@ bool res_isexe(std::string& file, std::string& path_info, std::string& script_na
 	return false;
 }
 
-std::vector<server::ListInfo> res_flist(std::string path) {
+static std::vector<server::ListInfo> res_flist(std::string path) {
 	std::vector<server::ListInfo> ret;
 	DIR* dir;
 	struct dirent* dirp;
@@ -488,15 +488,11 @@ std::vector<server::ListInfo> res_flist(std::string path) {
 		server::ListInfo listInfo;
 		listInfo.name = dirp->d_name;
 		std::string file = path + listInfo.name;
-		if (res_isdir(file)) {
-			listInfo.isdir = true;
-			listInfo.size = 0;
-		} else {
-			listInfo.isdir = false;
-			struct stat statbuf = {0};
-			stat(file.c_str(), &statbuf);
-			listInfo.size = statbuf.st_size;
-		}
+		struct stat statbuf = {0};
+		stat(file.c_str(), &statbuf);
+		listInfo.size = statbuf.st_size;
+		memcpy(&listInfo.date, gmtime(&statbuf.st_mtime), sizeof(struct tm));
+		listInfo.isdir = res_isdir(file);
 		ret.push_back(listInfo);
 	}
 	closedir(dir);
@@ -504,13 +500,13 @@ std::vector<server::ListInfo> res_flist(std::string path) {
 	return ret;
 }
 
-unsigned long res_fsize(RES_INFO* res_info) {
+static unsigned long res_fsize(RES_INFO* res_info) {
 	struct stat statbuf = {0};
 	fstat(fileno(res_info->read), &statbuf);
 	return statbuf.st_size;
 }
 
-std::string res_ftime(std::string file, int diff = 0) {
+static std::string res_ftime(std::string file, int diff = 0) {
 	struct stat statbuf = {0};
 	stat(file.c_str(), &statbuf);
 	time_t tt = statbuf.st_mtime + diff;
@@ -540,7 +536,7 @@ std::string res_ftime(std::string file, int diff = 0) {
 	return buf;
 }
 
-std::string res_fgets(RES_INFO* res_info) {
+static std::string res_fgets(RES_INFO* res_info) {
 	std::string ret;
 	char buf[BUFSIZ], *ptr;
 	memset(buf, 0, sizeof(buf));
@@ -551,20 +547,20 @@ std::string res_fgets(RES_INFO* res_info) {
 	return ret;
 }
 
-unsigned long res_write(RES_INFO* res_info, char* data, unsigned long size) {
+static unsigned long res_write(RES_INFO* res_info, char* data, unsigned long size) {
 	return fwrite(data, 1, size, res_info->write);
 }
 
-unsigned long res_read(RES_INFO* res_info, char* data, unsigned long size) {
+static unsigned long res_read(RES_INFO* res_info, char* data, unsigned long size) {
 	if (feof(res_info->read)) return 0;
 	return fread(data, 1, size, res_info->read);
 }
 
-void res_popen_sigchild(int signo) {
+static void res_popen_sigchild(int signo) {
     wait(0);
 }
 
-RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs) {
+static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs) {
     int filedesr[2], filedesw[2];
     pid_t child;
     long flags;
@@ -647,7 +643,7 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 	return NULL;
 }
 
-void res_close(RES_INFO* res_info) {
+static void res_close(RES_INFO* res_info) {
 	if (res_info) {
 		if (res_info->read) fclose(res_info->read);
 		if (res_info->write) fclose(res_info->write);
@@ -925,7 +921,7 @@ request_top:
 						res_body += script_name;
 						res_body += "</title></head><body><h1>";
 						res_body += script_name;
-						res_body += "</h1><hr />";
+						res_body += "</h1><hr /><pre>";
 						res_body += "<table border=0>";
 						std::vector<server::ListInfo> flist = res_flist(path);
 						std::vector<server::ListInfo>::iterator it;
@@ -934,15 +930,32 @@ request_top:
 							res_body += tthttpd::url_encode(it->name);
 							res_body += "\">";
 							res_body += it->name;
-							res_body += "</a></td><td align=right>&nbsp;&nbsp;";
+							res_body += "</a></td>";
+							res_body += "<td>";
+							struct tm tm = it->date;
+							sprintf(buf, "%02d-%s-%04d %02d:%02d",
+								tm.tm_mday,
+								months[tm.tm_mon],
+								tm.tm_year+1900,
+								tm.tm_hour,
+								tm.tm_min);
+							res_body += buf;
+							res_body += "</td>";
+							res_body += "<td align=right>&nbsp;&nbsp;";
 							if (!it->isdir) {
-								sprintf(buf, "%d", (int)it->size);
+								if (it->size < 1000)
+									sprintf(buf, "%d", (int)it->size);
+								else
+								if (it->size < 1000000)
+									sprintf(buf, "%dK", (int)it->size/1000);
+								else
+									sprintf(buf, "%.1dM", (int)it->size/1000000);
 								res_body += buf;
 							} else
 								res_body += "[DIR]";
 							res_body += "</td></tr>";
 						}
-						res_body += "</table><hr /></body></html>";
+						res_body += "</table></pre ><hr /></body></html>";
 					}
 					throw res_code;
 				}
