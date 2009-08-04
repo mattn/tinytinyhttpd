@@ -172,7 +172,7 @@ public:
 			path = fullpath;
 #endif
 		std::replace(path.begin(), path.end(), '\\', '/');
-		size_t end_pos = path.find_last_of("?#");
+		size_t end_pos = path.find_last_of('?');
 		if (end_pos != std::string::npos) path.resize(end_pos);
 
 		std::vector<std::string> path_sep = split_string(path, "/");

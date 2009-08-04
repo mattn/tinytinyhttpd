@@ -809,7 +809,7 @@ request_top:
 				std::string script_name = vparam[1];
 				std::string query_string;
 				std::string path_info = "/";
-				size_t end_pos = vparam[1].find_first_of("?#");
+				size_t end_pos = vparam[1].find_first_of('?');
 				if (end_pos != std::string::npos) {
 					query_string = script_name.substr(end_pos+1);
 					script_name = script_name.substr(0, end_pos);
@@ -828,8 +828,9 @@ request_top:
 				std::string before = root;
 				if (before[before.size()-1] == '/')
 					before.resize(before.size() - 1);
-				before += tthttpd::url_decode(vparam[1]);
+				before += tthttpd::url_decode(script_name);
 				std::string path = server::get_realpath(before);
+				printf("%s, %s\n", before.c_str(), path.c_str());
 				if (before != path) {
 					path = path.c_str() + root.size() - 1;
 					res_code = "HTTP/1.1 301 Document Moved";
@@ -1120,7 +1121,17 @@ request_top:
 						env = "CONTENT_LENGTH=";
 						env += buf;
 						envs.push_back(env);
+					}
 
+					if (VERBOSE(4)) {
+						std::vector<std::string>::iterator it;
+						printf("  --- ARGS ---\n");
+						for(it = args.begin(); it != args.end(); it++)
+							printf("  %s\n", it->c_str());
+						printf("  --- ENVS ---\n");
+						for(it = envs.begin(); it != envs.end(); it++)
+							printf("  %s\n", it->c_str());
+						printf("  ------------\n");
 					}
 
 					res_info = res_popen(args, envs);
