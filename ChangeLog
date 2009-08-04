@@ -3,6 +3,8 @@
 	* fixed spawn exec behavior.
 	* fixed redirection when URL include '..'.
 	* removed unicode things. it didn't work for a long time.
+	* fixed problem that query-string does not post when POST.
+	* removed tricky treatment for CGI arguments.
 
 2009-08-03: version 0.0.3
 

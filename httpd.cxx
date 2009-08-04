@@ -374,13 +374,7 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 
 	for(it = args.begin(), n = 0; it != args.end(); it++, n++) {
 		if (it != args.begin()) command += " ";
-		if (n == 1 && args[1].at(0) == '/') {
-			std::string path = args[1];
-			size_t end_pos = path.find_last_of('/');
-			if (end_pos != std::string::npos) path.erase(0, end_pos + 1);
-			command += path;
-		} else
-			command += *it;
+		command += *it;
 	}
 
 	for(it = envs.begin(); it != envs.end(); it++)
@@ -393,8 +387,7 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 		ptr += it->size() + 1;
 	}
 
-	std::string path = args.size() > 1 && args[1].at(0) == '/' ?
-		args[1] : args[0];
+	std::string path = args.size() > 1  ? args[1] : args[0];
 	size_t end_pos = path.find_last_of('/');
 	if (end_pos != std::string::npos) path.erase(end_pos);
 
@@ -573,17 +566,8 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 	args_ptr = new char*[args.size() + 1];
 	envs_ptr = new char*[envs.size() + 1];
 
-	for(n = 0, it = args.begin(); it != args.end(); n++, it++) {
-		if (n == 1 && args.size() > 1 && args[1].size() > 0 && args[1].at(0) == '/') {
-			std::string path = args[1];
-			size_t end_pos = path.find_last_of('/');
-			if (end_pos != std::string::npos)
-				args_ptr[n] = (char*)path.c_str() + end_pos + 1;
-			else
-				args_ptr[n] = (char*)path.c_str();
-		} else
-			args_ptr[n] = (char*)it->c_str();
-	}
+	for(n = 0, it = args.begin(); it != args.end(); n++, it++)
+		args_ptr[n] = (char*)it->c_str();
 	args_ptr[args.size()] = 0;
 
 	for(n = 0, it = envs.begin(); it != envs.end(); n++, it++)
@@ -830,7 +814,6 @@ request_top:
 					before.resize(before.size() - 1);
 				before += tthttpd::url_decode(script_name);
 				std::string path = server::get_realpath(before);
-				printf("%s, %s\n", before.c_str(), path.c_str());
 				if (before != path) {
 					path = path.c_str() + root.size() - 1;
 					res_code = "HTTP/1.1 301 Document Moved";
