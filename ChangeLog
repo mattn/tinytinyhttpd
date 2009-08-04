@@ -2,6 +2,7 @@
 
 	* fixed spawn exec behavior.
 	* fixed redirection when URL include '..'.
+	* removed unicode things. it didn't work for a long time.
 
 2009-08-03: version 0.0.3
 
