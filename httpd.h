@@ -67,20 +67,20 @@ public:
 	typedef struct {
 		int msgsock;
 		server *httpd;
-		tstring address;
+		std::string address;
 	} HttpdInfo;
-	typedef std::map<tstring, tstring> BasicAuths;
+	typedef std::map<std::string, std::string> BasicAuths;
 	typedef struct {
-		std::vector<tstring> accept_list;
+		std::vector<std::string> accept_list;
 	} AcceptAuth;
-	typedef std::map<tstring, AcceptAuth> AcceptAuths;
-	typedef std::vector<tstring> AcceptIPs;
+	typedef std::map<std::string, AcceptAuth> AcceptAuths;
+	typedef std::vector<std::string> AcceptIPs;
 
-	typedef void (*LoggerFunc)(const HttpdInfo* httpd_info, const tstring& request);
-	typedef std::map<tstring, tstring> MimeTypes;
-	typedef std::vector<tstring> DefaultPages;
-	typedef std::map<tstring, tstring> RequestAliases;
-	typedef std::map<tstring, tstring> RequestEnvironments;
+	typedef void (*LoggerFunc)(const HttpdInfo* httpd_info, const std::string& request);
+	typedef std::map<std::string, std::string> MimeTypes;
+	typedef std::vector<std::string> DefaultPages;
+	typedef std::map<std::string, std::string> RequestAliases;
+	typedef std::map<std::string, std::string> RequestEnvironments;
 
 private:
 #ifdef _WIN32
@@ -115,18 +115,18 @@ public:
 		fs_charset = "utf-8";
 		thread = 0;
 		loggerfunc = NULL;
-		mime_types[_T("gif")] = _T("image/gif");
-		mime_types[_T("jpg")] = _T("image/jpeg");
-		mime_types[_T("png")] = _T("image/png");
-		mime_types[_T("htm")] = _T("text/html");
-		mime_types[_T("html")] = _T("text/html");
-		mime_types[_T("txt")] = _T("text/plain");
-		mime_types[_T("xml")] = _T("text/xml");
-		mime_types[_T("js")] = _T("application/x-javascript");
-		mime_types[_T("css")] = _T("text/css");
-		default_pages.push_back(_T("index.html"));
-		default_pages.push_back(_T("index.php"));
-		default_pages.push_back(_T("index.cgi"));
+		mime_types["gif"] = "image/gif";
+		mime_types["jpg"] = "image/jpeg";
+		mime_types["png"] = "image/png";
+		mime_types["htm"] = "text/html";
+		mime_types["html"] = "text/html";
+		mime_types["txt"] = "text/plain";
+		mime_types["xml"] = "text/xml";
+		mime_types["js"] = "application/x-javascript";
+		mime_types["css"] = "text/css";
+		default_pages.push_back("index.html");
+		default_pages.push_back("index.php");
+		default_pages.push_back("index.cgi");
 		spawn_executable = false;
 		verbose_mode = 0;
 	};
@@ -138,7 +138,7 @@ public:
 		initialize();
 		port = _port;
 	}
-	server(unsigned short _port, tstring _target) {
+	server(unsigned short _port, std::string _target) {
 		initialize();
 		port = _port;
 	}
@@ -148,17 +148,17 @@ public:
 	bool start();
 	bool stop();
 	bool wait();
-	void set_fs_charset(tstring _fs_charset) {
-		fs_charset = tstring2string(_fs_charset);
+	void set_fs_charset(std::string _fs_charset) {
+		fs_charset = _fs_charset;
 	}
-	tstring get_fs_charset() {
-		return string2tstring(fs_charset);
+	std::string get_fs_charset() {
+		return fs_charset;
 	}
 	void setAuthentication(BasicAuths _basic_auths) {
 		basic_auths = _basic_auths;
 	}
-	void bindRoot(tstring _root) {
-		root = get_realpath(tstring2string(_root));
+	void bindRoot(std::string _root) {
+		root = get_realpath(_root);
 	}
 	static std::string get_realpath(std::string path) {
 #ifdef _WIN32

@@ -105,24 +105,24 @@ std::string res_curtime(int diff = 0) {
 	return buf;
 }
 
-void my_perror(tstring mes) {
+void my_perror(std::string mes) {
 #ifdef _WIN32
 	void*	pMsgBuf;
-	FormatMessage(
+	FormatMessageA(
 		 FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
 		 NULL,
 		 GetLastError(),
 		 MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
-		 (LPTSTR) &pMsgBuf,
+		 (LPSTR) &pMsgBuf,
 		 0,
 		 NULL
 	);
 
-	tstring err = (LPTSTR)pMsgBuf;
+	std::string err = (LPSTR)pMsgBuf;
 	LocalFree(pMsgBuf);
 	err.erase(std::remove(err.begin(), err.end(), '\r'), err.end());
 	err.erase(std::remove(err.begin(), err.end(), '\n'), err.end());
-	_ftprintf(stderr, _T("%s: %s\n"), mes.c_str(), err.c_str());
+	fprintf(stderr, "%s: %s\n", mes.c_str(), err.c_str());
 #else
 	perror(mes.c_str());
 #endif
@@ -398,7 +398,7 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 			&pi);
 	delete envs_ptr;
 	if(!bRet) {
-		my_perror(_T("CreateProcessA"));
+		my_perror("CreateProcessA");
 		CloseHandle(hClientIn_rd);
 		CloseHandle(hClientOut_wr);
 		return NULL;
@@ -603,7 +603,7 @@ RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs
 			path.erase(end_pos);
 		chdir(path.c_str());
 		if (execve(args_ptr[0], args_ptr, envs_ptr) < 0) {
-			my_perror(_T("execv"));
+			my_perror("execv");
 		}
 		delete[] envs_ptr;
 		delete[] args_ptr;
@@ -667,10 +667,10 @@ void* response_thread(void* param)
 	server::HttpdInfo *pHttpdInfo = (server::HttpdInfo*)param;
 	server *httpd = pHttpdInfo->httpd;
 	int msgsock = (int)pHttpdInfo->msgsock;
-	tstring address = pHttpdInfo->address;
+	std::string address = pHttpdInfo->address;
 	std::string str, req, ret;
 	std::vector<std::string> vparam;
-	std::vector<tstring> vauth;
+	std::vector<std::string> vauth;
 	std::string refer;
 	char length[256];
 	std::string res_code;
@@ -759,8 +759,7 @@ request_top:
 	}
 
 	if (httpd->loggerfunc) {
-		tstring treq = string2tstring(req);
-		httpd->loggerfunc(pHttpdInfo, treq);
+		httpd->loggerfunc(pHttpdInfo, req);
 	}
 
 	vparam = split_string(req, " ");
@@ -783,11 +782,11 @@ request_top:
 			res_body = "Bad Request\n";
 			throw res_code;
 		} else {
-			tstring auth_basic;
+			std::string auth_basic;
 			if (http_authorization.size()) {
 				if (!strnicmp(http_authorization.c_str(), "basic ", 6))
-					auth_basic = string2tstring(base64_decode(http_authorization.c_str()+6));
-				vauth = split_string(auth_basic, _T(":"));
+					auth_basic = base64_decode(http_authorization.c_str()+6);
+				vauth = split_string(auth_basic, ":");
 //				if (vauth.size() > 0 && httpd->basic_auths.size() > 0 && httpd->basic_auths[vauth[0]] != vauth[1]) {
 //					res_code = "HTTP/1.1 401 Authorization Required";
 //					res_body = "Authorization Required";
@@ -849,7 +848,7 @@ request_top:
 
 				server::DefaultPages::iterator it_page;
 				for(it_page = httpd->default_pages.begin(); it_page != httpd->default_pages.end(); it_page++) {
-					std::string try_path = path + "/" + tstring2string(*it_page);
+					std::string try_path = path + "/" + *it_page;
 					res_info = res_fopen(try_path);
 					if (res_info) {
 						path = try_path;
@@ -862,21 +861,20 @@ request_top:
 				if (httpd->spawn_executable && res_isexe(path, path_info, script_name)) {
 					type = "@";
 				} else {
-					tstring dot = _T(".");
 					for(it_mime = httpd->mime_types.begin(); it_mime != httpd->mime_types.end(); it_mime++) {
-						tstring tpath = string2tstring(path);
-						tstring match = dot + it_mime->first;
-						if (!_tcscmp(tpath.c_str()+tpath.size()-match.size(), match.c_str())) {
-							type = tstring2string(it_mime->second);
+						std::string match = ".";
+						match += it_mime->first;
+						if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+							type = it_mime->second;
 							res_type = type;
 						}
 						if (it_mime->second[0] == '@') {
-							match += _T("/");
-							tchar *tptr = (tchar*)_tcsstr(tpath.c_str(), match.c_str());
-							if (tptr) {
-								type = tstring2string(it_mime->second);
+							match += "/";
+							char *ptr = (char*)strstr(path.c_str(), match.c_str());
+							if (ptr) {
+								type = it_mime->second;
 								res_type = type;
-								path_info = tptr + match.size() - 1;
+								path_info = ptr + match.size() - 1;
 								path.resize(path.size() - path_info.size());
 								script_name.resize(script_name.size() - path_info.size());
 							} else {
@@ -1109,7 +1107,7 @@ request_top:
 	}
 	catch(...) {
 		if (res_code.size() == 0) {
-			if (VERBOSE(1)) my_perror(_T(" cached exception"));
+			if (VERBOSE(1)) my_perror(" cached exception");
 			res_code = "HTTP/1.1 500 Bad Request";
 			res_body = "Internal Server Error\n";
 		}
@@ -1309,7 +1307,7 @@ void* watch_thread(void* param)
 			server::HttpdInfo *pHttpdInfo = new server::HttpdInfo;
 			pHttpdInfo->msgsock = msgsock;
 			pHttpdInfo->httpd = httpd;
-			pHttpdInfo->address = string2tstring(address);
+			pHttpdInfo->address = address;
 
 #ifdef _WIN32
 			_beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo);

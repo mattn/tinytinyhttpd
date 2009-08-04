@@ -47,7 +47,7 @@ static int getopt(int argc, char** argv, const char* opts) {
 	return(c);
 }
 
-void logFunc(const tthttpd::server::HttpdInfo* httpd_info, const tthttpd::tstring& request) {
+void logFunc(const tthttpd::server::HttpdInfo* httpd_info, const std::string& request) {
 	printf("%s\n", request.c_str());
 }
 
@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
 
 	tthttpd::server httpd(port);
 	//httpd.loggerfunc = logFunc;
-	httpd.bindRoot(tthttpd::string2tstring(root));
+	httpd.bindRoot(root);
 	httpd.spawn_executable = spawn_exec;
 	httpd.verbose_mode = verbose;
 	if (cfg) {
@@ -128,11 +128,11 @@ int main(int argc, char* argv[]) {
 		std::string val;
 
 		val = configs["global"]["root"];
-		if (val.size()) httpd.bindRoot(tthttpd::string2tstring(val));
+		if (val.size()) httpd.bindRoot(val);
 		val = configs["global"]["port"];
 		if (val.size()) httpd.port = (unsigned short)atoi(val.c_str());
 		val = configs["global"]["indexpages"];
-		if (val.size()) httpd.default_pages = tthttpd::split_string(tthttpd::string2tstring(val), _T(","));
+		if (val.size()) httpd.default_pages = tthttpd::split_string(val, ",");
 		val = configs["global"]["charset"];
 		if (val.size()) httpd.fs_charset = val;
 		val = configs["global"]["chroot"];
@@ -147,23 +147,23 @@ int main(int argc, char* argv[]) {
 
 		config = configs["request/aliases"];
 		for (it = config.begin(); it != config.end(); it++)
-			httpd.request_aliases[tthttpd::string2tstring(it->first)] = tthttpd::string2tstring(it->second);
+			httpd.request_aliases[it->first] = it->second;
 
 		config = configs["mime/types"];
 		for (it = config.begin(); it != config.end(); it++)
-			httpd.mime_types[tthttpd::string2tstring(it->first)] = tthttpd::string2tstring(it->second);
+			httpd.mime_types[it->first] = it->second;
 
 		config = configs["request/environments"];
 		for (it = config.begin(); it != config.end(); it++)
-			httpd.request_environments[tthttpd::string2tstring(it->first)] = tthttpd::string2tstring(it->second);
+			httpd.request_environments[it->first] = it->second;
 
 	} else {
 #ifdef _WIN32
-	httpd.mime_types[_T("cgi")] = _T("@c:/strawberry/perl/bin/perl.exe");
-	httpd.mime_types[_T("php")] = _T("@c:/progra~1/php/php-cgi.exe");
+	httpd.mime_types["cgi"] = "@c:/strawberry/perl/bin/perl.exe";
+	httpd.mime_types["php"] = "@c:/progra~1/php/php-cgi.exe";
 #else
-	httpd.mime_types[_T("cgi")] = _T("@/usr/bin/perl");
-	httpd.mime_types[_T("php")] = _T("@/usr/bin/php-cgi");
+	httpd.mime_types["cgi"] = "@/usr/bin/perl";
+	httpd.mime_types["php"] = "@/usr/bin/php-cgi";
 #endif
 	}
 	httpd.start();
