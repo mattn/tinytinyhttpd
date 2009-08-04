@@ -854,7 +854,9 @@ request_top:
 					std::string try_path = path + "/" + *it_page;
 					res_info = res_fopen(try_path);
 					if (res_info) {
+						res_close(res_info);
 						path = try_path;
+						script_name += *it_page;
 						break;
 					}
 				}
