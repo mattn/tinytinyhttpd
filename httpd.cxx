@@ -815,10 +815,13 @@ request_top:
 					}
 				}
 
-				std::string before = root + tthttpd::url_decode(vparam[1]);
+				std::string before = root;
+				if (before[before.size()-1] == '/')
+					before.resize(before.size() - 1);
+				before += tthttpd::url_decode(vparam[1]);
 				std::string path = server::get_realpath(before);
-				if (before.substr(0, path.size()) != path) {
-					path = path.c_str() + root.size();
+				if (before != path) {
+					path = path.c_str() + root.size() - 1;
 					res_code = "HTTP/1.1 301 Document Moved";
 					res_body = "Document Moved\n";
 					res_head = "Location: ";
@@ -895,8 +898,11 @@ request_top:
 					} else {
 					if (VERBOSE(2)) printf("  listing %s\n", path.c_str());
 						res_code = "HTTP/1.1 200 OK";
-						res_type = "text/html; charset=";
-						res_type += trim_string(httpd->fs_charset);
+						res_type = "text/html";
+						if (!httpd->fs_charset.empty()) {
+							res_type += "; charset=";
+							res_type += trim_string(httpd->fs_charset);
+						}
 						res_body = "<html><head><title>";
 						res_body += script_name;
 						res_body += "</title></head><body><h1>";
@@ -941,8 +947,8 @@ request_top:
 						res_body = "";
 						throw res_code;
 					}
-					if (it_mime == httpd->mime_types.end())
-						res_type = "application/octet-stream; charset=utf-8";
+					//if (it_mime == httpd->mime_types.end())
+					//	res_type = "application/octet-stream; charset=utf-8";
 					res_head += "Content-Type: ";
 					res_head += res_type;
 					res_head += ";\r\n";
