@@ -89,6 +89,7 @@ const char * const wdays[]={
 	"Fri",
 	"Sat"};
 
+#ifdef _WIN32
 static bool filetime2unixtime(const FILETIME* ft, struct tm* tm) {
     FILETIME lt;
     SYSTEMTIME st;
@@ -104,6 +105,7 @@ static bool filetime2unixtime(const FILETIME* ft, struct tm* tm) {
     tm->tm_sec = st.wSecond;
     return true;
 }
+#endif
 
 static std::string res_curtime(int diff = 0) {
 	time_t tt = time(NULL) + diff;
