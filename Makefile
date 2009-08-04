@@ -1,6 +1,7 @@
 .SUFFIXES: .cxx .o
 
 CPPFLAGS += -DHAVE_SETRESUID
+TAG=`git tag | tail -1`
 
 all : tthttpd
 
@@ -12,3 +13,6 @@ tthttpd : main.o httpd.o utils.o
 
 clean :
 	rm *.o tthttpd
+
+dist :
+	git archive --format=tar --prefix=tinytinyhttpd-${TAG}/ HEAD | gzip > tinytinyhttpd-${TAG}.tar.gz
