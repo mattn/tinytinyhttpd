@@ -157,26 +157,39 @@ bool res_isdir(std::string file) {
 bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
 	std::vector<std::string> split_path = split_string(file, "/");
 	std::string path = "";
+	std::string pathext = getenv("PATHEXT");
+	std::transform(pathext.begin(), pathext.end(), pathext.begin(), ::tolower);
+
+	std::vector<std::string> pathexts = split_string(pathext, ";");
+	std::vector<std::string>::iterator itext;
+
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
 		if (it->empty()) continue;
 		if (!path.empty()) path += "/";
 		path += *it;
     	struct stat	st;
 		stat((char *)path.c_str(), &st);
-		if (S_ISREG(st.st_mode) && stat((char *)path.c_str(), &st) == 0 &&
-				path.substr(path.size() - 4) == ".exe") {
-			path_info = file.c_str() + path.size();
-			script_name.resize(script_name.size() - path_info.size());
-			file = path;
-			return true;
+		if (S_ISREG(st.st_mode) && stat((char *)path.c_str(), &st) == 0) {
+			for (itext = pathexts.begin(); itext != pathexts.end(); itext++) {
+				if (path.substr(path.size() - itext->size()) == *itext) {
+					path_info = file.c_str() + path.size();
+					script_name.resize(script_name.size() - path_info.size());
+					file = path;
+					if (path_info.empty()) script_name += *it;
+					return true;
+				}
+			}
 		}
-		std::string tmp = path + ".exe";
-		stat((char *)tmp.c_str(), &st);
-		if (S_ISREG(st.st_mode) && stat((char *)tmp.c_str(), &st) == 0) {
-			path_info = file.c_str() + path.size();
-			script_name.resize(script_name.size() - path_info.size());
-			file = tmp;
-			return true;
+		for (itext = pathexts.begin(); itext != pathexts.end(); itext++) {
+			std::string tmp = path + *itext;
+			stat((char *)tmp.c_str(), &st);
+			if (S_ISREG(st.st_mode) && stat((char *)tmp.c_str(), &st) == 0) {
+				path_info = file.c_str() + path.size();
+				script_name.resize(script_name.size() - path_info.size());
+				file = tmp;
+				if (path_info.empty()) script_name += *it;
+				return true;
+			}
 		}
 	}
 	return false;
@@ -457,6 +470,7 @@ bool res_isexe(std::string& file, std::string& path_info, std::string& script_na
 			path_info = file.c_str() + path.size();
 			script_name.resize(script_name.size() - path_info.size());
 			file = path;
+			if (path_info.empty()) script_name += *it;
 			return true;
 		}
 	}
@@ -850,13 +864,15 @@ request_top:
 				}
 
 				server::DefaultPages::iterator it_page;
+				std::string try_path = path;
+				if (try_path[try_path.size()-1] != '/')
+					try_path += "/";
 				for(it_page = httpd->default_pages.begin(); it_page != httpd->default_pages.end(); it_page++) {
-					std::string try_path = path + "/" + *it_page;
-					res_info = res_fopen(try_path);
+					std::string check_path = try_path + *it_page;
+					res_info = res_fopen(check_path);
 					if (res_info) {
 						res_close(res_info);
-						path = try_path;
-						script_name += *it_page;
+						path = check_path;
 						break;
 					}
 				}
