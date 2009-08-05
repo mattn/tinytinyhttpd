@@ -122,8 +122,10 @@ std::string url_decode(const std::string& url);
 std::string url_encode(const std::string& url);
 std::string html_decode(const std::string& html);
 std::string html_encode(const std::string& html);
+std::map<std::string, std::string> parse_querystring(const std::string& query_string);
 
 void set_priv(const char *, const char *, const char *);
+
 }
 
 #endif /* _UTILS_H_ */

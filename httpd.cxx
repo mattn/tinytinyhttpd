@@ -223,13 +223,15 @@ static std::vector<server::ListInfo> res_flist(std::string path) {
 
 	do {
 		if (hFind == INVALID_HANDLE_VALUE) break;
-		server::ListInfo listInfo;
-		listInfo.name = fData.cFileName;
-		listInfo.isdir = (fData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-			? true : false;
-		listInfo.size = fData.nFileSizeLow;
-		filetime2unixtime(&fData.ftLastWriteTime, &listInfo.date);
-		ret.push_back(listInfo);
+		if (strcmp(fData.cFileName, ".")) {
+			server::ListInfo listInfo;
+			listInfo.name = fData.cFileName;
+			listInfo.isdir = (fData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+				? true : false;
+			listInfo.size = fData.nFileSizeLow;
+			filetime2unixtime(&fData.ftLastWriteTime, &listInfo.date);
+			ret.push_back(listInfo);
+		}
 	} while(FindNextFileA(hFind, &fData));
 	if (hFind != INVALID_HANDLE_VALUE) FindClose(hFind);
 	sort(ret.begin(), ret.end());
@@ -480,15 +482,17 @@ static std::vector<server::ListInfo> res_flist(std::string path) {
 		path += "/";
 	dir = opendir(path.c_str());
 	while((dirp = readdir(dir))) {
-		server::ListInfo listInfo;
-		listInfo.name = dirp->d_name;
-		std::string file = path + listInfo.name;
-		struct stat statbuf = {0};
-		stat(file.c_str(), &statbuf);
-		listInfo.size = statbuf.st_size;
-		memcpy(&listInfo.date, gmtime(&statbuf.st_mtime), sizeof(struct tm));
-		listInfo.isdir = res_isdir(file);
-		ret.push_back(listInfo);
+		if (strcmp(dirp->d_name, ".")) {
+			server::ListInfo listInfo;
+			listInfo.name = dirp->d_name;
+			std::string file = path + listInfo.name;
+			struct stat statbuf = {0};
+			stat(file.c_str(), &statbuf);
+			listInfo.size = statbuf.st_size;
+			memcpy(&listInfo.date, gmtime(&statbuf.st_mtime), sizeof(struct tm));
+			listInfo.isdir = res_isdir(file);
+			ret.push_back(listInfo);
+		}
 	}
 	closedir(dir);
 	sort(ret.begin(), ret.end());
@@ -594,7 +598,7 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 		usleep(500);
 		std::string path = args.size() > 1 && args[1].at(0) == '/' ?
 			args[1] : args[0];
-		int end_pos = path.find_last_of('/');
+		size_t end_pos = path.find_last_of('/');
 		if (end_pos)
 			path.erase(end_pos);
 		chdir(path.c_str());
@@ -912,6 +916,10 @@ request_top:
 						res_body += "<table border=0>";
 						std::vector<server::ListInfo> flist = res_flist(path);
 						std::vector<server::ListInfo>::iterator it;
+
+						// TODO: sort and reverse, sort key
+						//std::map<std::string, std::string> params = tthttpd::parse_querystring(query_string);
+
 						for(it = flist.begin(); it != flist.end(); it++) {
 							res_body += "<tr><td><a href=\"";
 							res_body += tthttpd::url_encode(it->name);

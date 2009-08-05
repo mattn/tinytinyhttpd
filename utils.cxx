@@ -1017,8 +1017,21 @@ std::string html_decode(const std::string& html) {
 	return ret;
 }
 
-void
-set_priv(const char *chuser_name, const char *chroot_dir, const char *title) {
+std::map<std::string, std::string> parse_querystring(const std::string& query_string) {
+	std::vector<std::string> params = split_string(query_string, "&");
+	std::vector<std::string>::iterator it;
+	std::map<std::string, std::string> ret;
+	for (it = params.begin(); it != params.end(); it++) {
+		size_t end_pos = it->find_first_of("=");
+		if (end_pos != std::string::npos)
+			ret[it->substr(0, end_pos)] = url_decode(it->substr(end_pos + 1));
+		else
+			ret[*it] = "";
+	}
+	return ret;
+}
+
+void set_priv(const char *chuser_name, const char *chroot_dir, const char *title) {
 #ifndef _WIN32
 	struct passwd *pw;
 
