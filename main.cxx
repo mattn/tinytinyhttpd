@@ -1,6 +1,8 @@
 #include "httpd.h"
 #include <string.h>
 
+#include "config.h"
+
 int  opterr = 1;
 int  optind = 1;
 int  optopt;

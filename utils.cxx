@@ -38,6 +38,7 @@
 #include <grp.h>
 #endif
 
+#include "config.h"
 #include "utils.h"
 #include <sstream>
 

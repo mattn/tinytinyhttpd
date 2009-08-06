@@ -32,6 +32,8 @@
 #include <sys/wait.h>
 #endif
 
+#include "config.h"
+
 namespace tthttpd {
 
 #ifdef _WIN32
