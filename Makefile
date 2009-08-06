@@ -16,3 +16,7 @@ clean :
 
 dist :
 	git archive --format=tar --prefix=tinytinyhttpd-${TAG}/ HEAD | gzip > tinytinyhttpd-${TAG}.tar.gz
+
+dist-upload :
+	github-upload tinytinyhttpd-${TAG}.tar.gz mattn/tinytinyhttpd
+
