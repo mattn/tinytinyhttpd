@@ -234,7 +234,7 @@ static std::vector<server::ListInfo> res_flist(std::string path) {
 		}
 	} while(FindNextFileA(hFind, &fData));
 	if (hFind != INVALID_HANDLE_VALUE) FindClose(hFind);
-	sort(ret.begin(), ret.end());
+	std::sort(ret.begin(), ret.end());
 	return ret;
 }
 
