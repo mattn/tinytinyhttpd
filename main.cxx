@@ -169,4 +169,6 @@ int main(int argc, char* argv[]) {
 	httpd.start();
 	httpd.wait();
 	// Ctrl-C to break
+
+	return 0;
 }
