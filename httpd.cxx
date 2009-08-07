@@ -1030,7 +1030,7 @@ request_top:
 					envs.push_back(env);
 
 					env = "REMOTE_ADDR=";
-					env += httpd->hostaddr;
+					env += address;
 					envs.push_back(env);
 
 					env = "HTTP_USER_AGENT=";
@@ -1352,7 +1352,8 @@ void* watch_thread(void* param)
 			pHttpdInfo->address = address;
 
 #ifdef _WIN32
-			_beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo);
+			HANDLE th = (HANDLE)_beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo);
+			while(!CloseHandle(th));
 #else
 			pthread_t pth;
 			pthread_create(&pth, NULL, response_thread, (void*)pHttpdInfo);
