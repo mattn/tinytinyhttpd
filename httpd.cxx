@@ -213,6 +213,34 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 	return false;
 }
 
+static bool res_iscgi(std::string& file, std::string& path_info, std::string& script_name, server::MimeTypes& mime_types, std::string& type) {
+	std::vector<std::string> split_path = split_string(file, "/");
+	std::string path = "";
+
+	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
+		if (it->empty()) continue;
+		if (!path.empty()) path += "/";
+		path += *it;
+    	struct stat	st;
+		if (stat((char *)path.c_str(), &st))
+			continue;
+		server::MimeTypes::iterator it_mime;
+		for(it_mime = mime_types.begin(); it_mime != mime_types.end(); it_mime++) {
+			std::string match = ".";
+			match += it_mime->first;
+			if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+				type = it_mime->second;
+				path_info = file.c_str() + path.size();
+				script_name.resize(script_name.size() - path_info.size());
+				file = path;
+				if (path_info.empty()) script_name += *it;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 static std::vector<server::ListInfo> res_flist(std::string path) {
 	WIN32_FIND_DATAA fData;
 	std::vector<server::ListInfo> ret;
@@ -469,6 +497,33 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 			file = path;
 			if (path_info.empty()) script_name += *it;
 			return true;
+		}
+	}
+	return false;
+}
+
+static bool res_iscgi(std::string& file, std::string& path_info, std::string& script_name, server::MimeTypes& mime_types, std::string& type) {
+	std::vector<std::string> split_path = split_string(file, "/");
+	std::string path = "";
+	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
+		if (it->empty()) continue;
+		path += "/";
+		path += *it;
+    	struct stat	st;
+		if (stat((char *)path.c_str(), &st))
+			continue;
+		server::MimeTypes::iterator it_mime;
+		for(it_mime = mime_types.begin(); it_mime != mime_types.end(); it_mime++) {
+			std::string match = ".";
+			match += it_mime->first;
+			if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+				type = it_mime->second;
+				path_info = file.c_str() + path.size();
+				script_name.resize(script_name.size() - path_info.size());
+				file = path;
+				if (path_info.empty()) script_name += *it;
+				return true;
+			}
 		}
 	}
 	return false;
@@ -869,27 +924,16 @@ request_top:
 				if (httpd->spawn_executable && res_isexe(path, path_info, script_name)) {
 					type = "@";
 				} else {
-					for(it_mime = httpd->mime_types.begin(); it_mime != httpd->mime_types.end(); it_mime++) {
-						std::string match = ".";
-						match += it_mime->first;
-						if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
-							type = it_mime->second;
-							res_type = type;
-						}
-						if (it_mime->second[0] == '@') {
-							match += "/";
-							char *ptr = (char*)strstr(path.c_str(), match.c_str());
-							if (ptr) {
+					if (!res_iscgi(path, path_info, script_name, httpd->mime_types, type)) {
+						for(it_mime = httpd->mime_types.begin(); it_mime != httpd->mime_types.end(); it_mime++) {
+							std::string match = ".";
+							match += it_mime->first;
+							if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
 								type = it_mime->second;
 								res_type = type;
-								path_info = ptr + match.size() - 1;
-								path.resize(path.size() - path_info.size());
-								script_name.resize(script_name.size() - path_info.size());
-							} else {
-								path_info = "";
 							}
+							if (!type.empty()) break;
 						}
-						if (type.size()) break;
 					}
 				}
 
