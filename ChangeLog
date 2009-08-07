@@ -7,6 +7,7 @@
 	* removed tricky treatment for CGI arguments.
 	* fixed Makefile.mvc to support vc6.
 	* fixed few compier warnings.
+	* fixed REMOTE_ADDR was server address.
 
 2009-08-03: version 0.0.3
 
