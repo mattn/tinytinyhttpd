@@ -416,16 +416,16 @@ std::string string_to_utf8(std::string str) {
 	size_t wcssize = mbssize;
 	wchar_t* pszStrWC = new wchar_t[wcssize + 1];
 	size_t n = 0, clen = 0, len = 0;
-	mblen(NULL, 0);
+	int tmp = mblen(NULL, 0);
 	while(len < mbssize) {
 		clen = mblen(ptr, MB_CUR_MAX);
 		if (clen <= 0) {
-			mblen(NULL, 0);
+			tmp = mblen(NULL, 0);
 			clen = 1;
 		}
 		clen = mbtowc(pszStrWC+n++, ptr,  clen);
 		if (clen <= 0) {
-			mblen(NULL, 0);
+			tmp = mblen(NULL, 0);
 			clen = 1;
 		}
 		len += clen;
@@ -623,16 +623,16 @@ std::string cut_string(std::string str, int cells, std::string padding) {
 	pszStrWC[n] = 0;
 #else
 	size_t clen = 0, len = 0;
-	mblen(NULL, 0);
+	int tmp = mblen(NULL, 0);
 	while(len < mbssize) {
 		clen = mblen(ptr, MB_CUR_MAX);
 		if (clen <= 0) {
-			mblen(NULL, 0);
+			tmp = mblen(NULL, 0);
 			clen = 1;
 		}
 		clen = mbtowc(pszStrWC+n++, ptr,  clen);
 		if (clen <= 0) {
-			mblen(NULL, 0);
+			tmp = mblen(NULL, 0);
 			clen = 1;
 		}
 		len += clen;
@@ -687,16 +687,16 @@ std::string cut_string_r(std::string str, int cells, std::string padding) {
 	pszStrWC[n] = 0;
 #else
 	size_t clen = 0, len = 0;
-	mblen(NULL, 0);
+	int tmp = mblen(NULL, 0);
 	while(len < mbssize) {
 		clen = mblen(ptr, MB_CUR_MAX);
 		if (clen <= 0) {
-			mblen(NULL, 0);
+			tmp = mblen(NULL, 0);
 			clen = 1;
 		}
 		clen = mbtowc(pszStrWC+n++, ptr,  clen);
 		if (clen <= 0) {
-			mblen(NULL, 0);
+			tmp = mblen(NULL, 0);
 			clen = 1;
 		}
 		len += clen;
