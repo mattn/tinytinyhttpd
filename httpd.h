@@ -68,6 +68,7 @@ public:
 		int msgsock;
 		server *httpd;
 		std::string address;
+		short port;
 	} HttpdInfo;
 	typedef std::map<std::string, std::string> BasicAuths;
 	typedef struct {
