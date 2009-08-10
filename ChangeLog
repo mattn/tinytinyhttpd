@@ -1,3 +1,9 @@
+2009-08-10: version 0.0.5
+
+	* add client port number.
+	* close writer handle when post finished.
+	* reset content-type when it got internal exception.
+
 2009-08-04: version 0.0.4
 
 	* fixed spawn exec behavior.
