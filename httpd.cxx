@@ -762,6 +762,7 @@ void* response_thread(void* param)
 	std::string http_user_agent;
 	std::string http_connection;
 	std::string http_cookie;
+	std::string http_referer;
 	std::string http_authorization;
 	std::string if_modified_since;
 	unsigned long content_length;
@@ -785,6 +786,7 @@ request_top:
 	http_connection = "";
 	http_cookie = "";
 	http_authorization = "";
+	http_referer = "";
 	content_type = "";
 	content_length = 0;
 	if_modified_since = "";
@@ -842,6 +844,11 @@ request_top:
 		key = "Authorization:";
 		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
 			http_authorization = trim_string(str.c_str() + key.size());
+			continue;
+		}
+		key = "REFERER:";
+		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
+			http_referer = trim_string(str.c_str() + key.size());
 			continue;
 		}
 	}
@@ -1145,6 +1152,12 @@ request_top:
 					if (!http_cookie.empty()) {
 						env = "HTTP_COOKIE=";
 						env += http_cookie;
+						envs.push_back(env);
+					}
+
+					if (!http_referer.empty()) {
+						env = "HTTP_REFERER=";
+						env += http_referer;
 						envs.push_back(env);
 					}
 
