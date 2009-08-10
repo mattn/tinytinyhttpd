@@ -1,0 +1,4 @@
+bin_PROGRAMS=tthttpd
+tthttpd_SOURCES=main.cxx httpd.cxx utils.cxx
+dist_pkgdata_DATA=example.conf
+tthttpd_LIBS=-lpthread
