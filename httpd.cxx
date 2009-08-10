@@ -57,6 +57,7 @@ typedef struct {
 	FILE* write;
 	pid_t process;
 #endif
+	unsigned long size;
 } RES_INFO;
 
 bool operator<(const server::ListInfo& left, const server::ListInfo& right) {
@@ -164,6 +165,7 @@ static RES_INFO* res_fopen(std::string file) {
 	res_info->read = hFile;
 	res_info->write = 0;
 	res_info->process = 0;
+	res_info->size = (unsigned long)-1;
 	return res_info;
 }
 
@@ -226,6 +228,7 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
 			continue;
 		server::MimeTypes::iterator it_mime;
 		for(it_mime = mime_types.begin(); it_mime != mime_types.end(); it_mime++) {
+			if (it_mime->second[0] != '@') continue;
 			std::string match = ".";
 			match += it_mime->first;
 			if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
@@ -233,7 +236,8 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
 				path_info = file.c_str() + path.size();
 				script_name.resize(script_name.size() - path_info.size());
 				file = path;
-				if (path_info.empty()) script_name += *it;
+				if (script_name.empty())
+					script_name = *it;
 				return true;
 			}
 		}
@@ -451,7 +455,15 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 	res_info->read = hClientOut_rd;
 	res_info->write = hClientIn_wr;
 	res_info->process = pi.hProcess;
+	res_info->size = (unsigned long)-1;
 	return res_info;
+}
+
+static void res_closewriter(RES_INFO* res_info) {
+	if (res_info && res_info->write) {
+		CloseHandle(res_info->write);
+		res_info->write = NULL;
+	}
 }
 
 static void res_close(RES_INFO* res_info) {
@@ -472,6 +484,7 @@ static RES_INFO* res_fopen(std::string file) {
 	res_info->read = fp;
 	res_info->write = 0;
 	res_info->process = 0;
+	res_info->size = (unsigned long)-1;
 	return res_info;
 }
 
@@ -514,6 +527,7 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
 			continue;
 		server::MimeTypes::iterator it_mime;
 		for(it_mime = mime_types.begin(); it_mime != mime_types.end(); it_mime++) {
+			if (it_mime->second[0] != '@') continue;
 			std::string match = ".";
 			match += it_mime->first;
 			if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
@@ -521,7 +535,8 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
 				path_info = file.c_str() + path.size();
 				script_name.resize(script_name.size() - path_info.size());
 				file = path;
-				if (path_info.empty()) script_name += *it;
+				if (script_name.empty())
+					script_name = *it;
 				return true;
 			}
 		}
@@ -594,10 +609,11 @@ static std::string res_fgets(RES_INFO* res_info) {
 	std::string ret;
 	char buf[BUFSIZ], *ptr;
 	memset(buf, 0, sizeof(buf));
-	fgets(buf, sizeof(buf), res_info->read);
-	ptr = strpbrk(buf, "\r\n");
-	if (ptr) *ptr = 0;
-	ret = buf;
+	if (fgets(buf, sizeof(buf), res_info->read)) {
+		ptr = strpbrk(buf, "\r\n");
+		if (ptr) *ptr = 0;
+		ret = buf;
+	}
 	return ret;
 }
 
@@ -635,8 +651,9 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 		envs_ptr[n] = (char*)it->c_str();
 	envs_ptr[envs.size()] = 0;
 
-    pipe(filedesr);
-    pipe(filedesw);
+	int tmp;
+    tmp = pipe(filedesr);
+    tmp = pipe(filedesw);
     child = fork();
     if (!child) {
 		dup2(filedesw[0], 0);
@@ -656,7 +673,7 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 		size_t end_pos = path.find_last_of('/');
 		if (end_pos)
 			path.erase(end_pos);
-		chdir(path.c_str());
+		tmp = chdir(path.c_str());
 		if (execve(args_ptr[0], args_ptr, envs_ptr) < 0) {
 			my_perror("execv");
 		}
@@ -683,9 +700,17 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 		res_info->read = fdopen(filedesr[0], "r");
 		res_info->write = fdopen(filedesw[1], "w");
 		res_info->process = child;
+		res_info->size = (unsigned long)-1;
 		return res_info;
     }
 	return NULL;
+}
+
+static void res_closewriter(RES_INFO* res_info) {
+	if (res_info && res_info->write) {
+		fclose(res_info->write);
+		res_info->write = NULL;
+	}
 }
 
 static void res_close(RES_INFO* res_info) {
@@ -723,6 +748,7 @@ void* response_thread(void* param)
 	server *httpd = pHttpdInfo->httpd;
 	int msgsock = (int)pHttpdInfo->msgsock;
 	std::string address = pHttpdInfo->address;
+	short port = pHttpdInfo->port;
 	std::string str, req, ret;
 	std::vector<std::string> vparam;
 	std::vector<std::string> vauth;
@@ -732,6 +758,7 @@ void* response_thread(void* param)
 	std::string res_type;
 	std::string res_body;
 	std::string res_head;
+	std::string http_accept;
 	std::string http_user_agent;
 	std::string http_connection;
 	std::string http_cookie;
@@ -754,6 +781,7 @@ request_top:
 	res_body = "";
 	res_info = NULL;
 	http_user_agent = "";
+	http_accept = "";
 	http_connection = "";
 	http_cookie = "";
 	http_authorization = "";
@@ -789,6 +817,11 @@ request_top:
 		key = "user-agent:";
 		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
 			http_user_agent = trim_string(str.c_str() + key.size());
+			continue;
+		}
+		key = "accept:";
+		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
+			http_accept = trim_string(str.c_str() + key.size());
 			continue;
 		}
 		key = "cookie:";
@@ -1001,6 +1034,7 @@ request_top:
 
 				res_info = res_fopen(path);
 				if (!res_info) {
+					res_type = "text/plain";
 					res_code = "HTTP/1.1 404 Not Found";
 					res_body = "Not Found\n";
 					throw res_code;
@@ -1013,6 +1047,7 @@ request_top:
 					if (if_modified_since.size() && if_modified_since == file_time) {
 						res_close(res_info);
 						res_info = NULL;
+						res_type = "text/plain";
 						res_code = "HTTP/1.1 304 Not Modified";
 						res_body = "";
 						throw res_code;
@@ -1036,6 +1071,7 @@ request_top:
 						post_data = new char[content_length+1];
 						memset(post_data, 0, content_length+1);
 						if (recv(msgsock, post_data, content_length, 0) <= 0) {
+							res_type = "text/plain";
 							res_code = "HTTP/1.1 500 Bad Request";
 							res_body = "Bad Request\n";
 							throw res_code;
@@ -1065,6 +1101,13 @@ request_top:
 					env = buf;
 					envs.push_back(env);
 
+					env = "SERVER_PROTOCOL=HTTP/1.1";
+					envs.push_back(env);
+
+					env = "SERVER_ADDR=";
+					env += httpd->hostaddr;
+					envs.push_back(env);
+
 					env = "SERVER_NAME=";
 					env += httpd->hostname;
 					envs.push_back(env);
@@ -1077,24 +1120,33 @@ request_top:
 					env += address;
 					envs.push_back(env);
 
-					env = "HTTP_USER_AGENT=";
-					env += http_user_agent;
+					sprintf(buf, "REMOTE_PORT=%d", port);
+					env = buf;
 					envs.push_back(env);
 
-					env = "SERVER_PROTOCOL=HTTP/1.1";
-					envs.push_back(env);
+					if (!http_user_agent.empty()) {
+						env = "HTTP_USER_AGENT=";
+						env += http_user_agent;
+						envs.push_back(env);
+					}
 
-					env = "HTTP_CONNECTION=";
-					env += http_connection;
-					envs.push_back(env);
+					if (!http_connection.empty()) {
+						env = "HTTP_CONNECTION=";
+						env += http_connection;
+						envs.push_back(env);
+					}
 
-					env = "HTTP_AUTHORIZATION=";
-					env += http_authorization;
-					envs.push_back(env);
+					if (!http_authorization.empty()) {
+						env = "HTTP_AUTHORIZATION=";
+						env += http_authorization;
+						envs.push_back(env);
+					}
 
-					env = "HTTP_COOKIE=";
-					env += http_cookie;
-					envs.push_back(env);
+					if (!http_cookie.empty()) {
+						env = "HTTP_COOKIE=";
+						env += http_cookie;
+						envs.push_back(env);
+					}
 
 					env = "REQUEST_METHOD=";
 					env += vparam[0];
@@ -1116,15 +1168,21 @@ request_top:
 					env += query_string;
 					envs.push_back(env);
 
-					env = "PATH_INFO=";
-					env += path_info;
-					envs.push_back(env);
+					if (!path_info.empty()) {
+						env = "PATH_INFO=";
+						env += path_info;
+						envs.push_back(env);
+					}
 
 					env = "REDIRECT_STATUS=1";
 					envs.push_back(env);
 
 					env = "PATH=";
 					env += getenv("PATH");
+					envs.push_back(env);
+
+					env = "HTTP_ACCEPT=";
+					env += http_accept;
 					envs.push_back(env);
 
 #ifdef _WIN32
@@ -1175,6 +1233,7 @@ request_top:
 					res_info = res_popen(args, envs);
 
 					if (post_data) {
+						if (VERBOSE(3)) printf("%s\n", post_data);
 						res_write(res_info, post_data, post_size);
 #ifndef _WIN32
 						fflush((FILE*)res_info->write);
@@ -1183,8 +1242,10 @@ request_top:
 						post_data = NULL;
 						post_size = 0;
 					}
+					res_closewriter(res_info);
 				}
 			} else {
+				res_type = "text/plain";
 				res_code = "HTTP/1.1 500 Bad Request";
 				res_body = "Bad Request\n";
 				throw res_code;
@@ -1194,6 +1255,7 @@ request_top:
 	catch(...) {
 		if (res_code.size() == 0) {
 			if (VERBOSE(1)) my_perror(" cached exception");
+			res_type = "text/plain";
 			res_code = "HTTP/1.1 500 Bad Request";
 			res_body = "Internal Server Error\n";
 		}
@@ -1209,6 +1271,7 @@ request_top:
 		while(content_length > 0) {
 			int ret = recv(msgsock, buf, sizeof(buf), 0);
 			if (ret < 0) {
+				res_type = "text/plain";
 				res_code = "HTTP/1.1 500 Bad Request";
 				res_body = "Bad Request\n";
 			}
@@ -1246,6 +1309,10 @@ request_top:
 			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
 				res_code = "HTTP/1.1" + str.substr(key.size());
 			}
+			key = "Content-Length:";
+			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
+				res_info->size = (unsigned long)atol(str.substr(key.size()).c_str());
+			}
 			res_head += str;
 			res_head += "\r\n";
 		}
@@ -1264,11 +1331,13 @@ request_top:
 
 	if (res_info) {
 		send(msgsock, "\r\n", 2, 0);
-		while(true) {
+		unsigned long total = res_info->size;
+		while(total != 0) {
 			memset(buf, 0, sizeof(buf));
 			unsigned long read = res_read(res_info, buf, sizeof(buf));
 			if (read == 0) break;
-			send(msgsock, buf, read, 0);
+			send(msgsock, buf, read > total ? total : read, 0);
+			total -= read;
 		}
 		res_close(res_info);
 		res_info = NULL;
@@ -1394,6 +1463,7 @@ void* watch_thread(void* param)
 			pHttpdInfo->msgsock = msgsock;
 			pHttpdInfo->httpd = httpd;
 			pHttpdInfo->address = address;
+			pHttpdInfo->port = client.sin_port;
 
 #ifdef _WIN32
 			HANDLE th = (HANDLE)_beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo);
