@@ -47,10 +47,6 @@ static int getopt(int argc, char** argv, const char* opts) {
 	return(c);
 }
 
-void logFunc(const tthttpd::server::HttpdInfo* httpd_info, const std::string& request) {
-	printf("%s\n", request.c_str());
-}
-
 typedef std::map<std::string, std::string>	Config;
 typedef std::map<std::string, Config>		ConfigList;
 ConfigList loadConfigs(const char* filename) {
@@ -117,7 +113,6 @@ int main(int argc, char* argv[]) {
 	}
 
 	tthttpd::server httpd(port);
-	//httpd.loggerfunc = logFunc;
 	httpd.bindRoot(root);
 	httpd.spawn_executable = spawn_exec;
 	httpd.verbose_mode = verbose;
@@ -127,6 +122,16 @@ int main(int argc, char* argv[]) {
 		Config::iterator it;
 		std::string val;
 
+		val = configs["global"]["path"];
+#ifdef _WIN32
+		if (val.size()) {
+			std::string tmp = "PATH=";
+			tmp += val;
+			putenv(tmp.c_str());
+		}
+#else
+		if (val.size()) setenv("PATH", val.c_str(), true);
+#endif
 		val = configs["global"]["root"];
 		if (val.size()) httpd.bindRoot(val);
 		val = configs["global"]["port"];
@@ -166,6 +171,7 @@ int main(int argc, char* argv[]) {
 	httpd.mime_types["php"] = "@/usr/bin/php-cgi";
 #endif
 	}
+
 	httpd.start();
 	httpd.wait();
 	// Ctrl-C to break
