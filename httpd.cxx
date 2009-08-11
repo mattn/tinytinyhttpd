@@ -177,7 +177,8 @@ static bool res_isdir(std::string file) {
 static bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
 	std::vector<std::string> split_path = split_string(file, "/");
 	std::string path = "";
-	std::string pathext = getenv("PATHEXT");
+	const char* env = getenv("PATHEXT");
+	std::string pathext = env ? env : "";
 	std::transform(pathext.begin(), pathext.end(), pathext.begin(), ::tolower);
 
 	std::vector<std::string> pathexts = split_string(pathext, ";");
@@ -188,8 +189,7 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 		if (!path.empty()) path += "/";
 		path += *it;
     	struct stat	st;
-		stat((char *)path.c_str(), &st);
-		if (S_ISREG(st.st_mode) && stat((char *)path.c_str(), &st) == 0) {
+		if (stat((char *)path.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
 			for (itext = pathexts.begin(); itext != pathexts.end(); itext++) {
 				if (path.substr(path.size() - itext->size()) == *itext) {
 					path_info = file.c_str() + path.size();
@@ -202,8 +202,7 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 		}
 		for (itext = pathexts.begin(); itext != pathexts.end(); itext++) {
 			std::string tmp = path + *itext;
-			stat((char *)tmp.c_str(), &st);
-			if (S_ISREG(st.st_mode) && stat((char *)tmp.c_str(), &st) == 0) {
+			if (stat((char *)tmp.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
 				path_info = file.c_str() + path.size();
 				script_name.resize(script_name.size() - path_info.size());
 				file = tmp;
