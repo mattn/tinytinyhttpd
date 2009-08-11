@@ -3,7 +3,7 @@
 all : tthttpd.exe
 
 tthttpd.exe : main.o httpd.o utils.o
-	g++ -o $@ main.o httpd.o utils.o -lpthread -lws2_32
+	g++ -o $@ main.o httpd.o utils.o -lws2_32
 
 .cxx.o :
 	g++ -Wall -c $<

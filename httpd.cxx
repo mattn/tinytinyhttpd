@@ -236,8 +236,8 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
 				path_info = file.c_str() + path.size();
 				script_name.resize(script_name.size() - path_info.size());
 				file = path;
-				if (script_name.empty())
-					script_name = *it;
+				if (script_name == "/")
+					script_name += *it;
 				return true;
 			}
 		}
@@ -535,8 +535,8 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
 				path_info = file.c_str() + path.size();
 				script_name.resize(script_name.size() - path_info.size());
 				file = path;
-				if (script_name.empty())
-					script_name = *it;
+				if (script_name == "/")
+					script_name += *it;
 				return true;
 			}
 		}

@@ -127,6 +127,7 @@ public:
 		mime_types["css"] = "text/css";
 		default_pages.push_back("index.html");
 		default_pages.push_back("index.php");
+		default_pages.push_back("index.rb");
 		default_pages.push_back("index.cgi");
 		spawn_executable = false;
 		verbose_mode = 0;
