@@ -777,7 +777,7 @@ void* response_thread(void* param)
 request_top:
 	keep_alive = false;
 	res_code = "";
-	res_type = "text/html; charset=utf-8";
+	res_type = "";
 	res_head = "";
 	res_body = "";
 	res_info = NULL;
@@ -915,8 +915,7 @@ request_top:
 					before.resize(before.size() - 1);
 				before += tthttpd::url_decode(script_name);
 				std::string path = server::get_realpath(before);
-				if (before != path) {
-					printf("foo! %s, %s\n", path.c_str(), before.c_str());
+				if (before != path && path.substr(root.size()) == root) {
 					path = path.c_str() + root.size();
 					res_code = "HTTP/1.1 301 Document Moved";
 					res_body = "Document Moved\n";
@@ -979,6 +978,7 @@ request_top:
 
 				if (res_isdir(path)) {
 					if (vparam[1].size() && vparam[1][vparam[1].size()-1] != '/') {
+						res_type = "text/plain";
 						res_code = "HTTP/1.1 301 Document Moved";
 						res_body = "Document Moved\n";
 						res_head = "Location: ";
@@ -986,8 +986,8 @@ request_top:
 						res_head += "/\n";
 					} else {
 					if (VERBOSE(2)) printf("  listing %s\n", path.c_str());
-						res_code = "HTTP/1.1 200 OK";
 						res_type = "text/html";
+						res_code = "HTTP/1.1 200 OK";
 						if (!httpd->fs_charset.empty()) {
 							res_type += "; charset=";
 							res_type += trim_string(httpd->fs_charset);
@@ -1059,10 +1059,8 @@ request_top:
 						res_body = "";
 						throw res_code;
 					}
-					//if (it_mime == httpd->mime_types.end())
-					//	res_type = "application/octet-stream; charset=utf-8";
 					res_head += "Content-Type: ";
-					res_head += res_type;
+					res_head += type;
 					res_head += ";\r\n";
 					res_head += "Content-Length: ";
 					res_head += buf;
