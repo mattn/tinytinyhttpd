@@ -912,8 +912,11 @@ request_top:
 					before.resize(before.size() - 1);
 				before += tthttpd::url_decode(script_name);
 				std::string path = server::get_realpath(before);
-				if (before != path && path.substr(root.size()) == root) {
-					path = path.c_str() + root.size();
+				if (before != path && (path.size() < root.size() || path.substr(root.size()) == root)) {
+					if (path.size() > root.size())
+						path = path.c_str() + root.size();
+					else
+						path = "/";
 					res_code = "HTTP/1.1 301 Document Moved";
 					res_body = "Document Moved\n";
 					res_head = "Location: ";
