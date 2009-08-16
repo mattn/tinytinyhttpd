@@ -31,6 +31,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #endif
+#ifdef HAVE_CRYPT
+#include <crypt.h> 
+#endif
 
 namespace tthttpd {
 
@@ -547,7 +550,7 @@ static std::vector<server::ListInfo> res_flist(std::string path) {
 	std::vector<server::ListInfo> ret;
 	DIR* dir;
 	struct dirent* dirp;
-	if (path.size() && path[path.size()-1] != '/')
+	if (!path.empty() && path[path.size()-1] != '/')
 		path += "/";
 	dir = opendir(path.c_str());
 	while((dirp = readdir(dir))) {
@@ -881,11 +884,6 @@ request_top:
 				if (!strnicmp(http_authorization.c_str(), "basic ", 6))
 					auth_basic = base64_decode(http_authorization.c_str()+6);
 				vauth = split_string(auth_basic, ":");
-//				if (vauth.size() > 0 && httpd->basic_auths.size() > 0 && httpd->basic_auths[vauth[0]] != vauth[1]) {
-//					res_code = "HTTP/1.1 401 Authorization Required";
-//					res_body = "Authorization Required";
-//					throw res_code;
-//				}
 			}
 			if (vparam[0] == "GET" || vparam[0] == "POST" || vparam[0] == "HEAD") {
 				std::string root = server::get_realpath(httpd->root + "/");
@@ -931,11 +929,47 @@ request_top:
 				}
 				*/
 
-				if (vauth.size() > 0) {
-					server::AcceptAuths::iterator it_auth;
-					for(it_auth = httpd->accept_auths.begin(); it_auth != httpd->accept_auths.end(); it_auth++) {
-						if (!strncmp(it_auth->first.c_str(), script_name.c_str(), it_auth->first.size())) {
-							if (std::find(it_auth->second.accept_list.begin(), it_auth->second.accept_list.end(), vauth[0]) == it_auth->second.accept_list.end()) {
+				std::vector<server::BasicAuthInfo>::iterator it_basicauth;
+				for (it_basicauth = httpd->basic_auths.begin(); it_basicauth != httpd->basic_auths.end(); it_basicauth++) {
+					if (!it_basicauth->method.empty() && it_basicauth->method != vparam[0]) continue;
+					if (!it_basicauth->target.empty() && strncmp(vparam[1].c_str(), it_basicauth->target.c_str(), it_basicauth->target.size())) continue;
+					break;
+				}
+				/* TODO: crytp_md5_string()
+				if (it_basicauth != httpd->basic_auths.end()) {
+					bool authorized = false;
+					if (!vauth.empty()) {
+						if (VERBOSE(2)) printf("  authorizing %s\n", vparam[1].c_str());
+						std::vector<server::AuthInfo>::iterator it_auth;
+						for (it_auth = it_basicauth->auths.begin(); it_auth != it_basicauth->auths.end(); it_auth++) {
+							if (it_auth->user != vauth[0]) continue;
+							std::string pass = crytp_md5_string(vauth[1]);
+							if (it_auth->pass != pass) continue;
+							authorized = true;
+						}
+					}
+					if (!authorized) {
+						res_code = "HTTP/1.1 401 Authorization Required";
+						res_head = "WWW-Authenticate: Basic";
+						if (!it_basicauth->realm.empty()) {
+							res_head += " realm=\"";
+							res_head += it_basicauth->realm;
+							res_head += "\"";
+						}
+						res_head += "\r\n";
+						res_body = "Authorization Required";
+						throw res_code;
+					}
+				}
+				*/
+				if (!vauth.empty()) {
+					server::AcceptAuths::iterator it_accept;
+					for(it_accept = httpd->accept_auths.begin(); it_accept != httpd->accept_auths.end(); it_accept++) {
+						if (!strncmp(it_accept->first.c_str(), script_name.c_str(), it_accept->first.size())) {
+							if (std::find(
+										it_accept->second.accept_list.begin(),
+										it_accept->second.accept_list.end(), vauth[0])
+									== it_accept->second.accept_list.end()) {
 								res_code = "HTTP/1.1 401 Authorization Required";
 								res_head = "WWW-Authenticate: Basic realm=\"Authorization Required\"\r\n";
 								res_body = "Authorization Required";

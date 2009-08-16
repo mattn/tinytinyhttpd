@@ -70,7 +70,17 @@ public:
 		std::string address;
 		short port;
 	} HttpdInfo;
-	typedef std::map<std::string, std::string> BasicAuths;
+	typedef struct {
+		std::string user;
+		std::string pass;
+	} AuthInfo;
+	typedef struct {
+		std::string target;
+		std::string method;
+		std::string realm;
+		std::vector<AuthInfo> auths;
+	} BasicAuthInfo;
+	typedef std::vector<BasicAuthInfo> BasicAuths;
 	typedef struct {
 		std::vector<std::string> accept_list;
 	} AcceptAuth;
@@ -171,8 +181,9 @@ public:
 			path = fullpath;
 #else
 		char fullpath[PATH_MAX] = {0};
-		if (realpath((char*)path.c_str(), fullpath))
+		if (realpath((char*)path.c_str(), fullpath)) {
 			path = fullpath;
+		}
 #endif
 		std::replace(path.begin(), path.end(), '\\', '/');
 		size_t end_pos = path.find_last_of('?');

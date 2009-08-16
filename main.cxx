@@ -79,6 +79,26 @@ ConfigList loadConfigs(const char* filename) {
 	return configs;
 }
 
+bool loadAuthfile(const char* filename, std::vector<tthttpd::server::AuthInfo>& auths) {
+	char buffer[BUFSIZ];
+	auths.clear();
+	FILE* fp = fopen(filename, "r");
+	if (!fp) return false;
+	while(fp && fgets(buffer, sizeof(buffer), fp)) {
+		char* line = buffer;
+		char* ptr = strpbrk(line, "\r\n");
+		if (ptr) *ptr = 0;
+		ptr = strchr(line, ':');
+		if (ptr) *ptr++ = 0;
+		tthttpd::server::AuthInfo info;
+		info.user = line;
+		info.pass = ptr;
+		auths.push_back(info);
+	}
+	fclose(fp);
+	return true;
+}
+
 int main(int argc, char* argv[]) {
 	int c;
 	const char* root = ".";
@@ -161,6 +181,20 @@ int main(int argc, char* argv[]) {
 		config = configs["request/environments"];
 		for (it = config.begin(); it != config.end(); it++)
 			httpd.request_environments[it->first] = it->second;
+
+		config = configs["authentication"];
+		for (it = config.begin(); it != config.end(); it++) {
+			tthttpd::server::BasicAuthInfo basic_auth_info;
+			basic_auth_info.target = it->first;
+			std::vector<std::string> infos = tthttpd::split_string(it->second, ",");
+			basic_auth_info.method = infos[0];
+			basic_auth_info.realm = infos[1];
+			std::vector<tthttpd::server::AuthInfo> auth_infos;
+			if (loadAuthfile(infos[2].c_str(), auth_infos))
+				basic_auth_info.auths = auth_infos;
+			httpd.basic_auths.push_back(basic_auth_info);
+		}
+
 
 	} else {
 #ifdef _WIN32
