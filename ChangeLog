@@ -5,6 +5,7 @@
 	* reset content-type when it got internal exception.
 	* autotoolize.
 	* add referer.
+	* fixed behavior of symbolic link.
 
 2009-08-04: version 0.0.4
 

@@ -23,7 +23,7 @@
 #ifndef _HTTPD_H_
 #define _HTTPD_H_
 
-#define HTTPD_VERSION 0x0005
+#define HTTPD_VERSION 0x0006
 
 #ifdef _MSC_VER
 #pragma warning(disable:4018 4503 4530 4786 4996)
