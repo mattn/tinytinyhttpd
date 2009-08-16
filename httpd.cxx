@@ -923,11 +923,13 @@ request_top:
 					res_head += "\n";
 					throw res_code;
 				}
+				/*
 				if (strncmp(root.c_str(), path.c_str(), root.size())) {
 					res_code = "HTTP/1.1 500 Bad Request";
 					res_body = "Bad Request\n";
 					throw res_code;
 				}
+				*/
 
 				if (vauth.size() > 0) {
 					server::AcceptAuths::iterator it_auth;
@@ -1243,7 +1245,7 @@ request_top:
 					res_info = res_popen(args, envs);
 
 					if (post_data) {
-						if (VERBOSE(3)) printf("%s\n", post_data);
+						if (VERBOSE(999)) printf("%s\n", post_data);
 						res_write(res_info, post_data, post_size);
 #ifndef _WIN32
 						fflush((FILE*)res_info->write);
