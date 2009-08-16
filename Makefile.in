@@ -176,7 +176,7 @@ target_alias = @target_alias@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 tthttpd_SOURCES = main.cxx httpd.cxx utils.cxx utils.h httpd.h
-dist_pkgdata_DATA = example.conf
+dist_pkgdata_DATA = example.conf Makefile.std Makefile.w32 Makefile.mvc README.mkd VERSION autogen.sh
 tthttpd_LIBS = -lpthread
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-am
