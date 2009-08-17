@@ -1238,6 +1238,19 @@ std::string md5_string(const std::string& input) {
 	return digest;
 }
 
+std::string string_to_hex(const std::string& input) {
+	const static char hex_table[] = "0123456789abcdef";
+	std::string temp;
+	temp.resize(input.size() * 2);
+	std::string::size_type i;
+	std::string::const_iterator itr = input.begin();
+	for (i = 0; itr != input.end(); itr++, i++) {
+		temp[i++] = hex_table[(*itr & 0xF0) >> 4];
+		temp[i] = hex_table[*itr & 0x0F];
+	}
+	return temp;
+}
+
 void set_priv(const char *chuser_name, const char *chroot_dir, const char *title) {
 #ifndef _WIN32
 	struct passwd *pw;

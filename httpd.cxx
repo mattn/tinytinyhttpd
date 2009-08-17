@@ -32,7 +32,7 @@
 #include <sys/wait.h>
 #endif
 #ifdef HAVE_CRYPT
-#include <crypt.h> 
+#include "des.h"
 #endif
 
 namespace tthttpd {
@@ -938,7 +938,6 @@ request_top:
 					if (!it_basicauth->target.empty() && strncmp(vparam[1].c_str(), it_basicauth->target.c_str(), it_basicauth->target.size())) continue;
 					break;
 				}
-				/* TODO: crytp_md5_string()
 				if (it_basicauth != httpd->basic_auths.end()) {
 					bool authorized = false;
 					if (!vauth.empty()) {
@@ -946,8 +945,18 @@ request_top:
 						std::vector<server::AuthInfo>::iterator it_auth;
 						for (it_auth = it_basicauth->auths.begin(); it_auth != it_basicauth->auths.end(); it_auth++) {
 							if (it_auth->user != vauth[0]) continue;
-							std::string pass = crytp_md5_string(vauth[1]);
-							if (it_auth->pass != pass) continue;
+							/*
+							std::vector<std::string> pwd = split_string(it_auth->pass, "$");
+							std::string tmp = vauth[1];
+							tmp += "$apr1$";
+							tmp += pwd[2];
+							std::string pwd_md5 = string_to_hex(crypt(vauth[1].c_str(), pwd[2].c_str()));
+							printf("%s, %s\n", pwd_md5.c_str(), it_auth->pass.c_str());
+							if (it_auth->pass != pwd_md5) continue;
+							*/
+							// TODO: only support plain-text password.
+							//  hope to access .htpasswd file.
+							if (it_auth->pass != vauth[1]) continue;
 							authorized = true;
 						}
 					}
@@ -964,7 +973,6 @@ request_top:
 						throw res_code;
 					}
 				}
-				*/
 				if (!vauth.empty()) {
 					server::AcceptAuths::iterator it_accept;
 					for(it_accept = httpd->accept_auths.begin(); it_accept != httpd->accept_auths.end(); it_accept++) {
