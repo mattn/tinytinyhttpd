@@ -774,7 +774,6 @@ void* response_thread(void* param)
 	RES_INFO* res_info = NULL;
 	char buf[BUFSIZ];
 	bool keep_alive;
-	std::string key;
 
 request_top:
 	keep_alive = false;
@@ -803,54 +802,65 @@ request_top:
 
 	while(str.size()) {
 		str = get_line(msgsock);
-		if (str == "") break;
-		if (VERBOSE(2)) printf("  %s\n", str.c_str());
+		if (str.empty()) break;
+		const char *key, *ptr = str.c_str();
+		size_t len;
+		if (VERBOSE(2)) printf("  %s\n", ptr);
 
 		key = "connection:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			http_connection = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_connection = trim_string(ptr + len);
 			if (!stricmp(http_connection.c_str(), "keep-alive"))
 				keep_alive = true;
 			continue;
 		}
 		key = "content-length:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			content_length = atol(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			content_length = atol(ptr + len);
 			continue;
 		}
 		key = "user-agent:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			http_user_agent = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_user_agent = trim_string(ptr + len);
 			continue;
 		}
 		key = "accept:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			http_accept = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_accept = trim_string(ptr + len);
 			continue;
 		}
 		key = "cookie:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			http_cookie = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_cookie = trim_string(ptr + len);
 			continue;
 		}
 		key = "if-modified-since:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			if_modified_since = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			if_modified_since = trim_string(ptr + len);
 			continue;
 		}
 		key = "content-type:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			content_type = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			content_type = trim_string(ptr + len);
 			continue;
 		}
 		key = "Authorization:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			http_authorization = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_authorization = trim_string(ptr + len);
 			continue;
 		}
 		key = "REFERER:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			http_referer = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_referer = trim_string(ptr + len);
 			continue;
 		}
 	}
@@ -866,12 +876,6 @@ request_top:
 				std::find(httpd->accept_ips.begin(), httpd->accept_ips.end(), address) == httpd->accept_ips.end()) {
 			res_code = "HTTP/1.1 403 Forbidden";
 			res_body = "Forbidden";
-			throw res_code;
-		} else
-		if (httpd->basic_auths.size() && http_authorization.size() == 0) {
-			res_code = "HTTP/1.1 401 Authorization Required";
-			res_body = "Authorization Required";
-			res_head = "WWW-Authenticate: Basic realm=\"Authorization Required\"\r\n";
 			throw res_code;
 		} else
 		if (vparam.size() < 2 || vparam[1][0] != '/') {
@@ -934,11 +938,13 @@ request_top:
 
 				std::vector<server::BasicAuthInfo>::iterator it_basicauth;
 				for (it_basicauth = httpd->basic_auths.begin(); it_basicauth != httpd->basic_auths.end(); it_basicauth++) {
-					if (!it_basicauth->method.empty() && it_basicauth->method != vparam[0]) continue;
+					std::vector<std::string> methods = split_string(it_basicauth->method, "/");
+					if (!methods.empty() && std::find(methods.begin(), methods.end(), vparam[0]) == methods.end()) continue;
 					if (!it_basicauth->target.empty() && strncmp(vparam[1].c_str(), it_basicauth->target.c_str(), it_basicauth->target.size())) continue;
 					break;
 				}
 				if (it_basicauth != httpd->basic_auths.end()) {
+					printf("[%s],[%s]\n", it_basicauth->target.c_str(), it_basicauth->method.c_str());
 					bool authorized = false;
 					if (!vauth.empty()) {
 						if (VERBOSE(2)) printf("  authorizing %s\n", vparam[1].c_str());
@@ -982,7 +988,13 @@ request_top:
 										it_accept->second.accept_list.end(), vauth[0])
 									== it_accept->second.accept_list.end()) {
 								res_code = "HTTP/1.1 401 Authorization Required";
-								res_head = "WWW-Authenticate: Basic realm=\"Authorization Required\"\r\n";
+								res_head = "WWW-Authenticate: Basic";
+								if (!it_basicauth->realm.empty()) {
+									res_head += " realm=\"";
+									res_head += it_basicauth->realm;
+									res_head += "\"";
+								}
+								res_head += "\r\n";
 								res_body = "Authorization Required";
 								throw res_code;
 							}
@@ -1344,33 +1356,40 @@ request_top:
 		while(str.size()) {
 			memset(buf, 0, sizeof(buf));
 			str = res_fgets(res_info);
-			if (str.size() == 0) break;
+			if (str.empty()) break;
+			const char *key, *ptr = str.c_str();
+			size_t len;
 			if (str[0] == '<') {
 				// workaround for broken non-header response.
-				send(msgsock, str.c_str(), str.size(), 0);
+				send(msgsock, ptr, strlen(ptr), 0);
 				res_code = "";
 				break;
 			}
-			if (VERBOSE(2)) printf("  %s\n", str.c_str());
+			if (VERBOSE(2)) printf("  %s\n", ptr);
 			key = "connection:";
-			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-				http_connection = trim_string(str.c_str() + key.size());
+			len = strlen(key);
+			if (!strnicmp(ptr, key, len)) {
+				http_connection = trim_string(ptr + len);
 				if (!stricmp(http_connection.c_str(), "keep-alive"))
 					res_keep_alive = true;
 			}
 			key = "WWW-Authenticate: Basic ";
-			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
+			len = strlen(key);
+			if (!strnicmp(ptr, key, len)) {
 				res_code = "HTTP/1.1 401 Unauthorized";
 			}
 			key = "Status:";
-			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-				res_code = "HTTP/1.1" + str.substr(key.size());
+			len = strlen(key);
+			if (!strnicmp(ptr, key, len)) {
+				res_code = "HTTP/1.1";
+				res_code += str.substr(len);
 			}
 			key = "Content-Length:";
-			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-				res_info->size = (unsigned long)atol(str.substr(key.size()).c_str());
+			len = strlen(key);
+			if (!strnicmp(ptr, key, len)) {
+				res_info->size = (unsigned long)atol(str.substr(len).c_str());
 			}
-			res_head += str;
+			res_head += ptr;
 			res_head += "\r\n";
 		}
 		if (!res_keep_alive)

@@ -58,6 +58,7 @@ ConfigList loadConfigs(const char* filename) {
 	while(fp && fgets(buffer, sizeof(buffer), fp)) {
 		char* line = buffer;
 		char* ptr = strpbrk(line, "\r\n");
+		if (*line == '#') continue;
 		if (ptr) *ptr = 0;
 		ptr = strchr(line, ']');
 		if (*line == '[' && ptr) {
@@ -201,10 +202,12 @@ int main(int argc, char* argv[]) {
 	httpd.mime_types["cgi"] = "@c:/strawberry/perl/bin/perl.exe";
 	httpd.mime_types["php"] = "@c:/progra~1/php/php-cgi.exe";
 	httpd.mime_types["rb"] = "@c:/ruby/bin/ruby.exe";
+	httpd.mime_types["py"] = "@c:/python25/python.exe";
 #else
 	httpd.mime_types["cgi"] = "@/usr/bin/perl";
 	httpd.mime_types["php"] = "@/usr/bin/php-cgi";
 	httpd.mime_types["rb"] = "@/usr/bin/ruby";
+	httpd.mime_types["py"] = "@/usr/bin/python";
 #endif
 	}
 
