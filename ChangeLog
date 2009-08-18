@@ -1,6 +1,7 @@
 2009-08-17: version 0.0.6
 
 	* specify "Connection: closed" explicitly if output does not include Connection header.
+	* add REMOTE_USER header.
 
 2009-08-10: version 0.0.5
 
