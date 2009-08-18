@@ -1185,6 +1185,12 @@ request_top:
 					env = buf;
 					envs.push_back(env);
 
+					if (!http_authorization.empty()) {
+						env = "REMOTE_USER=";
+						env += vauth[0];
+						envs.push_back(env);
+					}
+
 					if (!http_user_agent.empty()) {
 						env = "HTTP_USER_AGENT=";
 						env += http_user_agent;
