@@ -31,9 +31,8 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #endif
-#ifdef HAVE_CRYPT
-#include "des.h"
-#endif
+
+extern char* crypt(const char *key, const char *setting);
 
 namespace tthttpd {
 
@@ -944,7 +943,6 @@ request_top:
 					break;
 				}
 				if (it_basicauth != httpd->basic_auths.end()) {
-					printf("[%s],[%s]\n", it_basicauth->target.c_str(), it_basicauth->method.c_str());
 					bool authorized = false;
 					if (!vauth.empty()) {
 						if (VERBOSE(2)) printf("  authorizing %s\n", vparam[1].c_str());
@@ -1392,8 +1390,12 @@ request_top:
 			res_head += ptr;
 			res_head += "\r\n";
 		}
-		if (!res_keep_alive)
+		if (!res_keep_alive) {
 			keep_alive = false;
+			if (http_connection.empty()) {
+				res_head += "Connection: closed\r\n";
+			}
+		}
 	}
 
 	if (res_code.size()) {
