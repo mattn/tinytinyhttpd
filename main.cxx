@@ -1,4 +1,5 @@
 #include "httpd.h"
+#include <stdio.h>
 #include <string.h>
 
 int  opterr = 1;

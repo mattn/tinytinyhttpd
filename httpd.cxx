@@ -24,6 +24,7 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <string.h>
 #ifndef _WIN32
 #include <signal.h>
