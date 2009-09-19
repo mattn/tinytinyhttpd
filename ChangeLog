@@ -1,3 +1,12 @@
+2009-08-10: version 0.0.5
+
+	* add client port number.
+	* close writer handle when post finished.
+	* reset content-type when it got internal exception.
+	* autotoolize.
+	* add referer.
+	* fixed behavior of symbolic link.
+
 2009-08-04: version 0.0.4
 
 	* fixed spawn exec behavior.
@@ -8,6 +17,7 @@
 	* fixed Makefile.mvc to support vc6.
 	* fixed few compier warnings.
 	* fixed REMOTE_ADDR was server address.
+	* fixed a way to check whether path is cgi.
 
 2009-08-03: version 0.0.3
 

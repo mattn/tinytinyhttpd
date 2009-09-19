@@ -49,10 +49,6 @@ static int getopt(int argc, char** argv, const char* opts) {
 	return(c);
 }
 
-void logFunc(const tthttpd::server::HttpdInfo* httpd_info, const std::string& request) {
-	printf("%s\n", request.c_str());
-}
-
 typedef std::map<std::string, std::string>	Config;
 typedef std::map<std::string, Config>		ConfigList;
 ConfigList loadConfigs(const char* filename) {
@@ -64,6 +60,7 @@ ConfigList loadConfigs(const char* filename) {
 	while(fp && fgets(buffer, sizeof(buffer), fp)) {
 		char* line = buffer;
 		char* ptr = strpbrk(line, "\r\n");
+		if (*line == '#') continue;
 		if (ptr) *ptr = 0;
 		ptr = strchr(line, ']');
 		if (*line == '[' && ptr) {
@@ -83,6 +80,26 @@ ConfigList loadConfigs(const char* filename) {
 	configs[profile] = config;
 	if (fp) fclose(fp);
 	return configs;
+}
+
+bool loadAuthfile(const char* filename, std::vector<tthttpd::server::AuthInfo>& auths) {
+	char buffer[BUFSIZ];
+	auths.clear();
+	FILE* fp = fopen(filename, "r");
+	if (!fp) return false;
+	while(fp && fgets(buffer, sizeof(buffer), fp)) {
+		char* line = buffer;
+		char* ptr = strpbrk(line, "\r\n");
+		if (ptr) *ptr = 0;
+		ptr = strchr(line, ':');
+		if (ptr) *ptr++ = 0;
+		tthttpd::server::AuthInfo info;
+		info.user = line;
+		info.pass = ptr;
+		auths.push_back(info);
+	}
+	fclose(fp);
+	return true;
 }
 
 int main(int argc, char* argv[]) {
@@ -119,7 +136,6 @@ int main(int argc, char* argv[]) {
 	}
 
 	tthttpd::server httpd(port);
-	//httpd.loggerfunc = logFunc;
 	httpd.bindRoot(root);
 	httpd.spawn_executable = spawn_exec;
 	httpd.verbose_mode = verbose;
@@ -129,6 +145,16 @@ int main(int argc, char* argv[]) {
 		Config::iterator it;
 		std::string val;
 
+		val = configs["global"]["path"];
+#ifdef _WIN32
+		if (val.size()) {
+			std::string tmp = "PATH=";
+			tmp += val;
+			putenv(tmp.c_str());
+		}
+#else
+		if (val.size()) setenv("PATH", val.c_str(), true);
+#endif
 		val = configs["global"]["root"];
 		if (val.size()) httpd.bindRoot(val);
 		val = configs["global"]["port"];
@@ -159,15 +185,34 @@ int main(int argc, char* argv[]) {
 		for (it = config.begin(); it != config.end(); it++)
 			httpd.request_environments[it->first] = it->second;
 
+		config = configs["authentication"];
+		for (it = config.begin(); it != config.end(); it++) {
+			tthttpd::server::BasicAuthInfo basic_auth_info;
+			basic_auth_info.target = it->first;
+			std::vector<std::string> infos = tthttpd::split_string(it->second, ",");
+			basic_auth_info.method = infos[0];
+			basic_auth_info.realm = infos[1];
+			std::vector<tthttpd::server::AuthInfo> auth_infos;
+			if (loadAuthfile(infos[2].c_str(), auth_infos))
+				basic_auth_info.auths = auth_infos;
+			httpd.basic_auths.push_back(basic_auth_info);
+		}
+
+
 	} else {
 #ifdef _WIN32
 	httpd.mime_types["cgi"] = "@c:/strawberry/perl/bin/perl.exe";
 	httpd.mime_types["php"] = "@c:/progra~1/php/php-cgi.exe";
+	httpd.mime_types["rb"] = "@c:/ruby/bin/ruby.exe";
+	httpd.mime_types["py"] = "@c:/python25/python.exe";
 #else
 	httpd.mime_types["cgi"] = "@/usr/bin/perl";
 	httpd.mime_types["php"] = "@/usr/bin/php-cgi";
+	httpd.mime_types["rb"] = "@/usr/bin/ruby";
+	httpd.mime_types["py"] = "@/usr/bin/python";
 #endif
 	}
+
 	httpd.start();
 	httpd.wait();
 	// Ctrl-C to break

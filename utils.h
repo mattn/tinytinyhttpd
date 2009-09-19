@@ -115,6 +115,8 @@ tstring trim_string(tstring strSrc);
 tstring& replace_string(tstring& strSrc, tstring strFrom, tstring strTo);
 #endif
 
+std::string md5_string(const std::string& input);
+std::string string_to_hex(const std::string& input);
 std::string base64_encode(unsigned char const* bytes_to_encode, unsigned int in_len);
 std::string base64_decode(std::string const& encoded_string);
 std::vector<char> base64_decode_binary(std::string const& encoded_string);

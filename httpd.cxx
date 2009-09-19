@@ -31,6 +31,9 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #endif
+#ifdef HAVE_CRYPT
+#include "des.h"
+#endif
 
 #include "config.h"
 
@@ -59,6 +62,7 @@ typedef struct {
 	FILE* write;
 	pid_t process;
 #endif
+	unsigned long size;
 } RES_INFO;
 
 bool operator<(const server::ListInfo& left, const server::ListInfo& right) {
@@ -166,6 +170,7 @@ static RES_INFO* res_fopen(std::string file) {
 	res_info->read = hFile;
 	res_info->write = 0;
 	res_info->process = 0;
+	res_info->size = (unsigned long)-1;
 	return res_info;
 }
 
@@ -177,7 +182,8 @@ static bool res_isdir(std::string file) {
 static bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
 	std::vector<std::string> split_path = split_string(file, "/");
 	std::string path = "";
-	std::string pathext = getenv("PATHEXT");
+	const char* env = getenv("PATHEXT");
+	std::string pathext = env ? env : "";
 	std::transform(pathext.begin(), pathext.end(), pathext.begin(), ::tolower);
 
 	std::vector<std::string> pathexts = split_string(pathext, ";");
@@ -188,8 +194,7 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 		if (!path.empty()) path += "/";
 		path += *it;
     	struct stat	st;
-		stat((char *)path.c_str(), &st);
-		if (S_ISREG(st.st_mode) && stat((char *)path.c_str(), &st) == 0) {
+		if (stat((char *)path.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
 			for (itext = pathexts.begin(); itext != pathexts.end(); itext++) {
 				if (path.substr(path.size() - itext->size()) == *itext) {
 					path_info = file.c_str() + path.size();
@@ -202,12 +207,41 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 		}
 		for (itext = pathexts.begin(); itext != pathexts.end(); itext++) {
 			std::string tmp = path + *itext;
-			stat((char *)tmp.c_str(), &st);
-			if (S_ISREG(st.st_mode) && stat((char *)tmp.c_str(), &st) == 0) {
+			if (stat((char *)tmp.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
 				path_info = file.c_str() + path.size();
 				script_name.resize(script_name.size() - path_info.size());
 				file = tmp;
 				if (path_info.empty()) script_name += *it;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static bool res_iscgi(std::string& file, std::string& path_info, std::string& script_name, server::MimeTypes& mime_types, std::string& type) {
+	std::vector<std::string> split_path = split_string(file, "/");
+	std::string path = "";
+
+	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
+		if (it->empty()) continue;
+		if (!path.empty()) path += "/";
+		path += *it;
+    	struct stat	st;
+		if (stat((char *)path.c_str(), &st))
+			continue;
+		server::MimeTypes::iterator it_mime;
+		for(it_mime = mime_types.begin(); it_mime != mime_types.end(); it_mime++) {
+			if (it_mime->second[0] != '@') continue;
+			std::string match = ".";
+			match += it_mime->first;
+			if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+				type = it_mime->second;
+				path_info = file.c_str() + path.size();
+				script_name.resize(script_name.size() - path_info.size());
+				file = path;
+				if (script_name == "/")
+					script_name += *it;
 				return true;
 			}
 		}
@@ -425,7 +459,15 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 	res_info->read = hClientOut_rd;
 	res_info->write = hClientIn_wr;
 	res_info->process = pi.hProcess;
+	res_info->size = (unsigned long)-1;
 	return res_info;
+}
+
+static void res_closewriter(RES_INFO* res_info) {
+	if (res_info && res_info->write) {
+		CloseHandle(res_info->write);
+		res_info->write = NULL;
+	}
 }
 
 static void res_close(RES_INFO* res_info) {
@@ -446,6 +488,7 @@ static RES_INFO* res_fopen(std::string file) {
 	res_info->read = fp;
 	res_info->write = 0;
 	res_info->process = 0;
+	res_info->size = (unsigned long)-1;
 	return res_info;
 }
 
@@ -476,11 +519,40 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 	return false;
 }
 
+static bool res_iscgi(std::string& file, std::string& path_info, std::string& script_name, server::MimeTypes& mime_types, std::string& type) {
+	std::vector<std::string> split_path = split_string(file, "/");
+	std::string path = "";
+	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
+		if (it->empty()) continue;
+		path += "/";
+		path += *it;
+    	struct stat	st;
+		if (stat((char *)path.c_str(), &st))
+			continue;
+		server::MimeTypes::iterator it_mime;
+		for(it_mime = mime_types.begin(); it_mime != mime_types.end(); it_mime++) {
+			if (it_mime->second[0] != '@') continue;
+			std::string match = ".";
+			match += it_mime->first;
+			if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+				type = it_mime->second;
+				path_info = file.c_str() + path.size();
+				script_name.resize(script_name.size() - path_info.size());
+				file = path;
+				if (script_name == "/")
+					script_name += *it;
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 static std::vector<server::ListInfo> res_flist(std::string path) {
 	std::vector<server::ListInfo> ret;
 	DIR* dir;
 	struct dirent* dirp;
-	if (path.size() && path[path.size()-1] != '/')
+	if (!path.empty() && path[path.size()-1] != '/')
 		path += "/";
 	dir = opendir(path.c_str());
 	while((dirp = readdir(dir))) {
@@ -541,10 +613,11 @@ static std::string res_fgets(RES_INFO* res_info) {
 	std::string ret;
 	char buf[BUFSIZ], *ptr;
 	memset(buf, 0, sizeof(buf));
-	fgets(buf, sizeof(buf), res_info->read);
-	ptr = strpbrk(buf, "\r\n");
-	if (ptr) *ptr = 0;
-	ret = buf;
+	if (fgets(buf, sizeof(buf), res_info->read)) {
+		ptr = strpbrk(buf, "\r\n");
+		if (ptr) *ptr = 0;
+		ret = buf;
+	}
 	return ret;
 }
 
@@ -582,8 +655,9 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 		envs_ptr[n] = (char*)it->c_str();
 	envs_ptr[envs.size()] = 0;
 
-    pipe(filedesr);
-    pipe(filedesw);
+	int tmp;
+    tmp = pipe(filedesr);
+    tmp = pipe(filedesw);
     child = fork();
     if (!child) {
 		dup2(filedesw[0], 0);
@@ -603,7 +677,7 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 		size_t end_pos = path.find_last_of('/');
 		if (end_pos)
 			path.erase(end_pos);
-		chdir(path.c_str());
+		tmp = chdir(path.c_str());
 		if (execve(args_ptr[0], args_ptr, envs_ptr) < 0) {
 			my_perror("execv");
 		}
@@ -630,9 +704,17 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 		res_info->read = fdopen(filedesr[0], "r");
 		res_info->write = fdopen(filedesw[1], "w");
 		res_info->process = child;
+		res_info->size = (unsigned long)-1;
 		return res_info;
     }
 	return NULL;
+}
+
+static void res_closewriter(RES_INFO* res_info) {
+	if (res_info && res_info->write) {
+		fclose(res_info->write);
+		res_info->write = NULL;
+	}
 }
 
 static void res_close(RES_INFO* res_info) {
@@ -670,6 +752,7 @@ void* response_thread(void* param)
 	server *httpd = pHttpdInfo->httpd;
 	int msgsock = (int)pHttpdInfo->msgsock;
 	std::string address = pHttpdInfo->address;
+	short port = pHttpdInfo->port;
 	std::string str, req, ret;
 	std::vector<std::string> vparam;
 	std::vector<std::string> vauth;
@@ -679,9 +762,11 @@ void* response_thread(void* param)
 	std::string res_type;
 	std::string res_body;
 	std::string res_head;
+	std::string http_accept;
 	std::string http_user_agent;
 	std::string http_connection;
 	std::string http_cookie;
+	std::string http_referer;
 	std::string http_authorization;
 	std::string if_modified_since;
 	unsigned long content_length;
@@ -691,19 +776,20 @@ void* response_thread(void* param)
 	RES_INFO* res_info = NULL;
 	char buf[BUFSIZ];
 	bool keep_alive;
-	std::string key;
 
 request_top:
 	keep_alive = false;
 	res_code = "";
-	res_type = "text/html; charset=utf-8";
+	res_type = "";
 	res_head = "";
 	res_body = "";
 	res_info = NULL;
 	http_user_agent = "";
+	http_accept = "";
 	http_connection = "";
 	http_cookie = "";
 	http_authorization = "";
+	http_referer = "";
 	content_type = "";
 	content_length = 0;
 	if_modified_since = "";
@@ -718,44 +804,65 @@ request_top:
 
 	while(str.size()) {
 		str = get_line(msgsock);
-		if (str == "") break;
-		if (VERBOSE(2)) printf("  %s\n", str.c_str());
+		if (str.empty()) break;
+		const char *key, *ptr = str.c_str();
+		size_t len;
+		if (VERBOSE(2)) printf("  %s\n", ptr);
 
 		key = "connection:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			http_connection = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_connection = trim_string(ptr + len);
 			if (!stricmp(http_connection.c_str(), "keep-alive"))
 				keep_alive = true;
 			continue;
 		}
 		key = "content-length:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			content_length = atol(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			content_length = atol(ptr + len);
 			continue;
 		}
 		key = "user-agent:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			http_user_agent = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_user_agent = trim_string(ptr + len);
+			continue;
+		}
+		key = "accept:";
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_accept = trim_string(ptr + len);
 			continue;
 		}
 		key = "cookie:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			http_cookie = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_cookie = trim_string(ptr + len);
 			continue;
 		}
 		key = "if-modified-since:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			if_modified_since = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			if_modified_since = trim_string(ptr + len);
 			continue;
 		}
 		key = "content-type:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			content_type = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			content_type = trim_string(ptr + len);
 			continue;
 		}
 		key = "Authorization:";
-		if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-			http_authorization = trim_string(str.c_str() + key.size());
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_authorization = trim_string(ptr + len);
+			continue;
+		}
+		key = "REFERER:";
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_referer = trim_string(ptr + len);
 			continue;
 		}
 	}
@@ -773,12 +880,6 @@ request_top:
 			res_body = "Forbidden";
 			throw res_code;
 		} else
-		if (httpd->basic_auths.size() && http_authorization.size() == 0) {
-			res_code = "HTTP/1.1 401 Authorization Required";
-			res_body = "Authorization Required";
-			res_head = "WWW-Authenticate: Basic realm=\"Authorization Required\"\r\n";
-			throw res_code;
-		} else
 		if (vparam.size() < 2 || vparam[1][0] != '/') {
 			res_code = "HTTP/1.1 500 Bad Request";
 			res_body = "Bad Request\n";
@@ -789,11 +890,6 @@ request_top:
 				if (!strnicmp(http_authorization.c_str(), "basic ", 6))
 					auth_basic = base64_decode(http_authorization.c_str()+6);
 				vauth = split_string(auth_basic, ":");
-//				if (vauth.size() > 0 && httpd->basic_auths.size() > 0 && httpd->basic_auths[vauth[0]] != vauth[1]) {
-//					res_code = "HTTP/1.1 401 Authorization Required";
-//					res_body = "Authorization Required";
-//					throw res_code;
-//				}
 			}
 			if (vparam[0] == "GET" || vparam[0] == "POST" || vparam[0] == "HEAD") {
 				std::string root = server::get_realpath(httpd->root + "/");
@@ -822,9 +918,11 @@ request_top:
 					before.resize(before.size() - 1);
 				before += tthttpd::url_decode(script_name);
 				std::string path = server::get_realpath(before);
-				if (before != path) {
-					printf("foo! %s, %s\n", path.c_str(), before.c_str());
-					path = path.c_str() + root.size();
+				if (before != path && (path.size() < root.size() || path.substr(root.size()) == root)) {
+					if (path.size() > root.size())
+						path = path.c_str() + root.size();
+					else
+						path = "/";
 					res_code = "HTTP/1.1 301 Document Moved";
 					res_body = "Document Moved\n";
 					res_head = "Location: ";
@@ -832,19 +930,73 @@ request_top:
 					res_head += "\n";
 					throw res_code;
 				}
+				/*
 				if (strncmp(root.c_str(), path.c_str(), root.size())) {
 					res_code = "HTTP/1.1 500 Bad Request";
 					res_body = "Bad Request\n";
 					throw res_code;
 				}
+				*/
 
-				if (vauth.size() > 0) {
-					server::AcceptAuths::iterator it_auth;
-					for(it_auth = httpd->accept_auths.begin(); it_auth != httpd->accept_auths.end(); it_auth++) {
-						if (!strncmp(it_auth->first.c_str(), script_name.c_str(), it_auth->first.size())) {
-							if (std::find(it_auth->second.accept_list.begin(), it_auth->second.accept_list.end(), vauth[0]) == it_auth->second.accept_list.end()) {
+				std::vector<server::BasicAuthInfo>::iterator it_basicauth;
+				for (it_basicauth = httpd->basic_auths.begin(); it_basicauth != httpd->basic_auths.end(); it_basicauth++) {
+					std::vector<std::string> methods = split_string(it_basicauth->method, "/");
+					if (!methods.empty() && std::find(methods.begin(), methods.end(), vparam[0]) == methods.end()) continue;
+					if (!it_basicauth->target.empty() && strncmp(vparam[1].c_str(), it_basicauth->target.c_str(), it_basicauth->target.size())) continue;
+					break;
+				}
+				if (it_basicauth != httpd->basic_auths.end()) {
+					printf("[%s],[%s]\n", it_basicauth->target.c_str(), it_basicauth->method.c_str());
+					bool authorized = false;
+					if (!vauth.empty()) {
+						if (VERBOSE(2)) printf("  authorizing %s\n", vparam[1].c_str());
+						std::vector<server::AuthInfo>::iterator it_auth;
+						for (it_auth = it_basicauth->auths.begin(); it_auth != it_basicauth->auths.end(); it_auth++) {
+							if (it_auth->user != vauth[0]) continue;
+							/*
+							std::vector<std::string> pwd = split_string(it_auth->pass, "$");
+							std::string tmp = vauth[1];
+							tmp += "$apr1$";
+							tmp += pwd[2];
+							std::string pwd_md5 = string_to_hex(crypt(vauth[1].c_str(), pwd[2].c_str()));
+							printf("%s, %s\n", pwd_md5.c_str(), it_auth->pass.c_str());
+							if (it_auth->pass != pwd_md5) continue;
+							*/
+							// TODO: only support plain-text password.
+							//  hope to access .htpasswd file.
+							if (it_auth->pass != vauth[1]) continue;
+							authorized = true;
+						}
+					}
+					if (!authorized) {
+						res_code = "HTTP/1.1 401 Authorization Required";
+						res_head = "WWW-Authenticate: Basic";
+						if (!it_basicauth->realm.empty()) {
+							res_head += " realm=\"";
+							res_head += it_basicauth->realm;
+							res_head += "\"";
+						}
+						res_head += "\r\n";
+						res_body = "Authorization Required";
+						throw res_code;
+					}
+				}
+				if (!vauth.empty()) {
+					server::AcceptAuths::iterator it_accept;
+					for(it_accept = httpd->accept_auths.begin(); it_accept != httpd->accept_auths.end(); it_accept++) {
+						if (!strncmp(it_accept->first.c_str(), script_name.c_str(), it_accept->first.size())) {
+							if (std::find(
+										it_accept->second.accept_list.begin(),
+										it_accept->second.accept_list.end(), vauth[0])
+									== it_accept->second.accept_list.end()) {
 								res_code = "HTTP/1.1 401 Authorization Required";
-								res_head = "WWW-Authenticate: Basic realm=\"Authorization Required\"\r\n";
+								res_head = "WWW-Authenticate: Basic";
+								if (!it_basicauth->realm.empty()) {
+									res_head += " realm=\"";
+									res_head += it_basicauth->realm;
+									res_head += "\"";
+								}
+								res_head += "\r\n";
 								res_body = "Authorization Required";
 								throw res_code;
 							}
@@ -871,32 +1023,22 @@ request_top:
 				if (httpd->spawn_executable && res_isexe(path, path_info, script_name)) {
 					type = "@";
 				} else {
-					for(it_mime = httpd->mime_types.begin(); it_mime != httpd->mime_types.end(); it_mime++) {
-						std::string match = ".";
-						match += it_mime->first;
-						if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
-							type = it_mime->second;
-							res_type = type;
-						}
-						if (it_mime->second[0] == '@') {
-							match += "/";
-							char *ptr = (char*)strstr(path.c_str(), match.c_str());
-							if (ptr) {
+					if (!res_iscgi(path, path_info, script_name, httpd->mime_types, type)) {
+						for(it_mime = httpd->mime_types.begin(); it_mime != httpd->mime_types.end(); it_mime++) {
+							std::string match = ".";
+							match += it_mime->first;
+							if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
 								type = it_mime->second;
 								res_type = type;
-								path_info = ptr + match.size() - 1;
-								path.resize(path.size() - path_info.size());
-								script_name.resize(script_name.size() - path_info.size());
-							} else {
-								path_info = "";
 							}
+							if (!type.empty()) break;
 						}
-						if (type.size()) break;
 					}
 				}
 
 				if (res_isdir(path)) {
 					if (vparam[1].size() && vparam[1][vparam[1].size()-1] != '/') {
+						res_type = "text/plain";
 						res_code = "HTTP/1.1 301 Document Moved";
 						res_body = "Document Moved\n";
 						res_head = "Location: ";
@@ -904,8 +1046,8 @@ request_top:
 						res_head += "/\n";
 					} else {
 					if (VERBOSE(2)) printf("  listing %s\n", path.c_str());
-						res_code = "HTTP/1.1 200 OK";
 						res_type = "text/html";
+						res_code = "HTTP/1.1 200 OK";
 						if (!httpd->fs_charset.empty()) {
 							res_type += "; charset=";
 							res_type += trim_string(httpd->fs_charset);
@@ -959,6 +1101,7 @@ request_top:
 
 				res_info = res_fopen(path);
 				if (!res_info) {
+					res_type = "text/plain";
 					res_code = "HTTP/1.1 404 Not Found";
 					res_body = "Not Found\n";
 					throw res_code;
@@ -971,14 +1114,13 @@ request_top:
 					if (if_modified_since.size() && if_modified_since == file_time) {
 						res_close(res_info);
 						res_info = NULL;
+						res_type = "text/plain";
 						res_code = "HTTP/1.1 304 Not Modified";
 						res_body = "";
 						throw res_code;
 					}
-					//if (it_mime == httpd->mime_types.end())
-					//	res_type = "application/octet-stream; charset=utf-8";
 					res_head += "Content-Type: ";
-					res_head += res_type;
+					res_head += type;
 					res_head += ";\r\n";
 					res_head += "Content-Length: ";
 					res_head += buf;
@@ -994,6 +1136,7 @@ request_top:
 						post_data = new char[content_length+1];
 						memset(post_data, 0, content_length+1);
 						if (recv(msgsock, post_data, content_length, 0) <= 0) {
+							res_type = "text/plain";
 							res_code = "HTTP/1.1 500 Bad Request";
 							res_body = "Bad Request\n";
 							throw res_code;
@@ -1023,6 +1166,13 @@ request_top:
 					env = buf;
 					envs.push_back(env);
 
+					env = "SERVER_PROTOCOL=HTTP/1.1";
+					envs.push_back(env);
+
+					env = "SERVER_ADDR=";
+					env += httpd->hostaddr;
+					envs.push_back(env);
+
 					env = "SERVER_NAME=";
 					env += httpd->hostname;
 					envs.push_back(env);
@@ -1035,24 +1185,39 @@ request_top:
 					env += address;
 					envs.push_back(env);
 
-					env = "HTTP_USER_AGENT=";
-					env += http_user_agent;
+					sprintf(buf, "REMOTE_PORT=%d", port);
+					env = buf;
 					envs.push_back(env);
 
-					env = "SERVER_PROTOCOL=HTTP/1.1";
-					envs.push_back(env);
+					if (!http_user_agent.empty()) {
+						env = "HTTP_USER_AGENT=";
+						env += http_user_agent;
+						envs.push_back(env);
+					}
 
-					env = "HTTP_CONNECTION=";
-					env += http_connection;
-					envs.push_back(env);
+					if (!http_connection.empty()) {
+						env = "HTTP_CONNECTION=";
+						env += http_connection;
+						envs.push_back(env);
+					}
 
-					env = "HTTP_AUTHORIZATION=";
-					env += http_authorization;
-					envs.push_back(env);
+					if (!http_authorization.empty()) {
+						env = "HTTP_AUTHORIZATION=";
+						env += http_authorization;
+						envs.push_back(env);
+					}
 
-					env = "HTTP_COOKIE=";
-					env += http_cookie;
-					envs.push_back(env);
+					if (!http_cookie.empty()) {
+						env = "HTTP_COOKIE=";
+						env += http_cookie;
+						envs.push_back(env);
+					}
+
+					if (!http_referer.empty()) {
+						env = "HTTP_REFERER=";
+						env += http_referer;
+						envs.push_back(env);
+					}
 
 					env = "REQUEST_METHOD=";
 					env += vparam[0];
@@ -1074,15 +1239,21 @@ request_top:
 					env += query_string;
 					envs.push_back(env);
 
-					env = "PATH_INFO=";
-					env += path_info;
-					envs.push_back(env);
+					if (!path_info.empty()) {
+						env = "PATH_INFO=";
+						env += path_info;
+						envs.push_back(env);
+					}
 
 					env = "REDIRECT_STATUS=1";
 					envs.push_back(env);
 
 					env = "PATH=";
 					env += getenv("PATH");
+					envs.push_back(env);
+
+					env = "HTTP_ACCEPT=";
+					env += http_accept;
 					envs.push_back(env);
 
 #ifdef _WIN32
@@ -1133,6 +1304,7 @@ request_top:
 					res_info = res_popen(args, envs);
 
 					if (post_data) {
+						if (VERBOSE(999)) printf("%s\n", post_data);
 						res_write(res_info, post_data, post_size);
 #ifndef _WIN32
 						fflush((FILE*)res_info->write);
@@ -1141,8 +1313,10 @@ request_top:
 						post_data = NULL;
 						post_size = 0;
 					}
+					res_closewriter(res_info);
 				}
 			} else {
+				res_type = "text/plain";
 				res_code = "HTTP/1.1 500 Bad Request";
 				res_body = "Bad Request\n";
 				throw res_code;
@@ -1152,6 +1326,7 @@ request_top:
 	catch(...) {
 		if (res_code.size() == 0) {
 			if (VERBOSE(1)) my_perror(" cached exception");
+			res_type = "text/plain";
 			res_code = "HTTP/1.1 500 Bad Request";
 			res_body = "Internal Server Error\n";
 		}
@@ -1167,6 +1342,7 @@ request_top:
 		while(content_length > 0) {
 			int ret = recv(msgsock, buf, sizeof(buf), 0);
 			if (ret < 0) {
+				res_type = "text/plain";
 				res_code = "HTTP/1.1 500 Bad Request";
 				res_body = "Bad Request\n";
 			}
@@ -1182,29 +1358,40 @@ request_top:
 		while(str.size()) {
 			memset(buf, 0, sizeof(buf));
 			str = res_fgets(res_info);
-			if (str.size() == 0) break;
+			if (str.empty()) break;
+			const char *key, *ptr = str.c_str();
+			size_t len;
 			if (str[0] == '<') {
 				// workaround for broken non-header response.
-				send(msgsock, str.c_str(), str.size(), 0);
+				send(msgsock, ptr, strlen(ptr), 0);
 				res_code = "";
 				break;
 			}
-			if (VERBOSE(2)) printf("  %s\n", str.c_str());
+			if (VERBOSE(2)) printf("  %s\n", ptr);
 			key = "connection:";
-			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-				http_connection = trim_string(str.c_str() + key.size());
+			len = strlen(key);
+			if (!strnicmp(ptr, key, len)) {
+				http_connection = trim_string(ptr + len);
 				if (!stricmp(http_connection.c_str(), "keep-alive"))
 					res_keep_alive = true;
 			}
 			key = "WWW-Authenticate: Basic ";
-			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
+			len = strlen(key);
+			if (!strnicmp(ptr, key, len)) {
 				res_code = "HTTP/1.1 401 Unauthorized";
 			}
 			key = "Status:";
-			if (!strnicmp(str.c_str(), key.c_str(), key.size())) {
-				res_code = "HTTP/1.1" + str.substr(key.size());
+			len = strlen(key);
+			if (!strnicmp(ptr, key, len)) {
+				res_code = "HTTP/1.1";
+				res_code += str.substr(len);
 			}
-			res_head += str;
+			key = "Content-Length:";
+			len = strlen(key);
+			if (!strnicmp(ptr, key, len)) {
+				res_info->size = (unsigned long)atol(str.substr(len).c_str());
+			}
+			res_head += ptr;
 			res_head += "\r\n";
 		}
 		if (!res_keep_alive)
@@ -1222,11 +1409,13 @@ request_top:
 
 	if (res_info) {
 		send(msgsock, "\r\n", 2, 0);
-		while(true) {
+		unsigned long total = res_info->size;
+		while(total != 0) {
 			memset(buf, 0, sizeof(buf));
 			unsigned long read = res_read(res_info, buf, sizeof(buf));
 			if (read == 0) break;
-			send(msgsock, buf, read, 0);
+			send(msgsock, buf, read > total ? total : read, 0);
+			total -= read;
 		}
 		res_close(res_info);
 		res_info = NULL;
@@ -1352,6 +1541,7 @@ void* watch_thread(void* param)
 			pHttpdInfo->msgsock = msgsock;
 			pHttpdInfo->httpd = httpd;
 			pHttpdInfo->address = address;
+			pHttpdInfo->port = client.sin_port;
 
 #ifdef _WIN32
 			HANDLE th = (HANDLE)_beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo);

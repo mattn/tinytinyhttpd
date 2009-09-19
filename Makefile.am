@@ -1,14 +1,3 @@
-tthttpd_SOURCES = \
-		httpd.cxx \
-		main.cxx \
-		utils.cxx
-
-sbin_PROGRAMS = tthttpd
-
-exampledir = $(datadir)/examples/tthttpd
-
-example_DATA = \
-		example.conf
-
-doc_DATA = \
-        README.mkd
+bin_PROGRAMS=tthttpd
+tthttpd_SOURCES=main.cxx httpd.cxx utils.cxx utils.h httpd.h
+dist_pkgdata_DATA=example.conf Makefile.std Makefile.w32 Makefile.mvc README.mkd VERSION autogen.sh

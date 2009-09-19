@@ -4,7 +4,7 @@ Tiny Tiny HTTPD
 WHAT IS THIS:
 -------------
 
-	tiny tiny httpd writen in C.
+	tiny tiny httpd written in C.
 
 LICENSE:
 -------

@@ -23,7 +23,7 @@
 #ifndef _HTTPD_H_
 #define _HTTPD_H_
 
-#define HTTPD_VERSION 0x0004
+#define HTTPD_VERSION 0x0006
 
 #ifdef _MSC_VER
 #pragma warning(disable:4018 4503 4530 4786 4996)
@@ -68,8 +68,19 @@ public:
 		int msgsock;
 		server *httpd;
 		std::string address;
+		short port;
 	} HttpdInfo;
-	typedef std::map<std::string, std::string> BasicAuths;
+	typedef struct {
+		std::string user;
+		std::string pass;
+	} AuthInfo;
+	typedef struct {
+		std::string target;
+		std::string method;
+		std::string realm;
+		std::vector<AuthInfo> auths;
+	} BasicAuthInfo;
+	typedef std::vector<BasicAuthInfo> BasicAuths;
 	typedef struct {
 		std::vector<std::string> accept_list;
 	} AcceptAuth;
@@ -126,6 +137,7 @@ public:
 		mime_types["css"] = "text/css";
 		default_pages.push_back("index.html");
 		default_pages.push_back("index.php");
+		default_pages.push_back("index.rb");
 		default_pages.push_back("index.cgi");
 		spawn_executable = false;
 		verbose_mode = 0;
@@ -169,8 +181,9 @@ public:
 			path = fullpath;
 #else
 		char fullpath[PATH_MAX] = {0};
-		if (realpath((char*)path.c_str(), fullpath))
+		if (realpath((char*)path.c_str(), fullpath)) {
 			path = fullpath;
+		}
 #endif
 		std::replace(path.begin(), path.end(), '\\', '/');
 		size_t end_pos = path.find_last_of('?');
