@@ -1555,7 +1555,11 @@ void* watch_thread(void* param)
 			while(!CloseHandle(th));
 #else
 			pthread_t pth;
-			pthread_create(&pth, NULL, response_thread, (void*)pHttpdInfo);
+			static int nnn = 0;
+			while(pthread_create(&pth, NULL, response_thread, (void*)pHttpdInfo) != 0) {
+				usleep(100);
+			}
+			pthread_detach(pth);
 #endif
 		}
 	}
