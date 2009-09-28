@@ -1,3 +1,7 @@
+2009-09-28: version 0.0.7
+
+	* add pthread_detach().
+
 2009-08-17: version 0.0.6
 
 	* specify "Connection: closed" explicitly if output does not include Connection header.
