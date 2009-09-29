@@ -26,11 +26,13 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #ifndef _WIN32
 #include <signal.h>
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <netinet/tcp.h>
 #endif
 
 extern char* crypt(const char *key, const char *setting);
@@ -1059,7 +1061,7 @@ request_top:
 					} else {
 					if (VERBOSE(2)) printf("  listing %s\n", path.c_str());
 						res_type = "text/html";
-						res_code = 200;
+						res_code = "200";
 						res_msg = "OK";
 						if (!httpd->fs_charset.empty()) {
 							res_type += "; charset=";
@@ -1433,11 +1435,13 @@ request_top:
 	}
 
 	if (res_code.size()) {
+		/*
 		if (res_proto == "HTTP/1.1") {
 			send(msgsock, "Status: ", 8, 0);
 			send(msgsock, res_code.c_str(), (int)res_code.size(), 0);
 			send(msgsock, "\r\n", 2, 0);
 		}
+		*/
 
 		send(msgsock, res_proto.c_str(), (int)res_proto.size(), 0);
 		send(msgsock, " ", 1, 0);
@@ -1514,6 +1518,9 @@ request_top:
 request_end:
 	shutdown(msgsock, SD_BOTH);
 	closesocket(msgsock);
+#ifdef _WIN32
+	_endthread();
+#endif
 
 	return NULL;
 }
@@ -1570,9 +1577,10 @@ void* watch_thread(void* param)
 		int client_len = sizeof(client);
 		memset(&client, 0, sizeof(client));
 		msgsock = accept(httpd->sock, (struct sockaddr *)&client, (socklen_t *)&client_len);
+		if (VERBOSE(3)) printf("accepted socket %d\n", msgsock);
 		if (msgsock == -1) {
-			closesocket(httpd->sock);
-			httpd->sock = -1;
+			if (VERBOSE(1)) printf("failed to accept socket(%d)\n", errno);
+			closesocket(msgsock);
 			/*
 			break;
 			*/
@@ -1587,19 +1595,34 @@ void* watch_thread(void* param)
 			pHttpdInfo->address = address;
 			pHttpdInfo->port = client.sin_port;
 
+			int value;
+
+			value = 1;
+			setsockopt(msgsock, IPPROTO_TCP, TCP_NODELAY, (char*)&value, sizeof(value));
+			value = 3;
+			setsockopt(msgsock, SOL_SOCKET, SO_SNDTIMEO, (char*)&value, sizeof(value));
+			value = 3;
+			setsockopt(msgsock, SOL_SOCKET, SO_RCVTIMEO, (char*)&value, sizeof(value));
+
 #ifdef _WIN32
-			HANDLE th = (HANDLE)_beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo);
-			while(!CloseHandle(th));
+			uintptr_t th;
+			while ((int)(th = _beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo)) == -1) {
+				Sleep(1);
+			}
 #else
 			pthread_t pth;
-			static int nnn = 0;
-			while(pthread_create(&pth, NULL, response_thread, (void*)pHttpdInfo) != 0) {
+			while (pthread_create(&pth, NULL, response_thread, (void*)pHttpdInfo) != 0) {
 				usleep(100);
 			}
 			pthread_detach(pth);
 #endif
 		}
 	}
+
+#ifdef _WIN32
+	_endthread();
+#endif
+
 	return NULL;
 }
 
