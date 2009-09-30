@@ -24,16 +24,18 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #ifndef _WIN32
 #include <signal.h>
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <netinet/tcp.h>
 #endif
-#ifdef HAVE_CRYPT
-#include "des.h"
-#endif
+
+extern char* crypt(const char *key, const char *setting);
 
 #include "config.h"
 
@@ -759,6 +761,8 @@ void* response_thread(void* param)
 	std::string refer;
 	char length[256];
 	std::string res_code;
+	std::string res_proto;
+	std::string res_msg;
 	std::string res_type;
 	std::string res_body;
 	std::string res_head;
@@ -780,6 +784,8 @@ void* response_thread(void* param)
 request_top:
 	keep_alive = false;
 	res_code = "";
+	res_proto = "";
+	res_msg = "";
 	res_type = "";
 	res_head = "";
 	res_body = "";
@@ -876,15 +882,21 @@ request_top:
 	try {
 		if (httpd->accept_ips.size() > 0 &&
 				std::find(httpd->accept_ips.begin(), httpd->accept_ips.end(), address) == httpd->accept_ips.end()) {
-			res_code = "HTTP/1.1 403 Forbidden";
+			res_code = "403";
+			res_msg = "Forbidden";
 			res_body = "Forbidden";
 			throw res_code;
 		} else
 		if (vparam.size() < 2 || vparam[1][0] != '/') {
-			res_code = "HTTP/1.1 500 Bad Request";
+			res_code = "500";
+			res_msg = "Bad Request";
 			res_body = "Bad Request\n";
 			throw res_code;
 		} else {
+			if (vparam.size() == 2)
+				res_proto = "HTTP/1.0";
+			else
+				res_proto = vparam[2];
 			std::string auth_basic;
 			if (http_authorization.size()) {
 				if (!strnicmp(http_authorization.c_str(), "basic ", 6))
@@ -923,7 +935,8 @@ request_top:
 						path = path.c_str() + root.size();
 					else
 						path = "/";
-					res_code = "HTTP/1.1 301 Document Moved";
+					res_code = "301";
+					res_msg = "Document Moved";
 					res_body = "Document Moved\n";
 					res_head = "Location: ";
 					res_head += path;
@@ -932,7 +945,8 @@ request_top:
 				}
 				/*
 				if (strncmp(root.c_str(), path.c_str(), root.size())) {
-					res_code = "HTTP/1.1 500 Bad Request";
+					res_code = "500";
+					res_msg = "Bad Request";
 					res_body = "Bad Request\n";
 					throw res_code;
 				}
@@ -946,7 +960,6 @@ request_top:
 					break;
 				}
 				if (it_basicauth != httpd->basic_auths.end()) {
-					printf("[%s],[%s]\n", it_basicauth->target.c_str(), it_basicauth->method.c_str());
 					bool authorized = false;
 					if (!vauth.empty()) {
 						if (VERBOSE(2)) printf("  authorizing %s\n", vparam[1].c_str());
@@ -969,7 +982,8 @@ request_top:
 						}
 					}
 					if (!authorized) {
-						res_code = "HTTP/1.1 401 Authorization Required";
+						res_code = "401";
+						res_msg = "Authorization Required";
 						res_head = "WWW-Authenticate: Basic";
 						if (!it_basicauth->realm.empty()) {
 							res_head += " realm=\"";
@@ -989,7 +1003,8 @@ request_top:
 										it_accept->second.accept_list.begin(),
 										it_accept->second.accept_list.end(), vauth[0])
 									== it_accept->second.accept_list.end()) {
-								res_code = "HTTP/1.1 401 Authorization Required";
+								res_code = "401";
+								res_msg = "Authorization Required";
 								res_head = "WWW-Authenticate: Basic";
 								if (!it_basicauth->realm.empty()) {
 									res_head += " realm=\"";
@@ -1039,7 +1054,8 @@ request_top:
 				if (res_isdir(path)) {
 					if (vparam[1].size() && vparam[1][vparam[1].size()-1] != '/') {
 						res_type = "text/plain";
-						res_code = "HTTP/1.1 301 Document Moved";
+						res_code = "301";
+						res_msg = "Document Moved";
 						res_body = "Document Moved\n";
 						res_head = "Location: ";
 						res_head += vparam[1];
@@ -1047,7 +1063,8 @@ request_top:
 					} else {
 					if (VERBOSE(2)) printf("  listing %s\n", path.c_str());
 						res_type = "text/html";
-						res_code = "HTTP/1.1 200 OK";
+						res_code = "200";
+						res_msg = "OK";
 						if (!httpd->fs_charset.empty()) {
 							res_type += "; charset=";
 							res_type += trim_string(httpd->fs_charset);
@@ -1102,12 +1119,14 @@ request_top:
 				res_info = res_fopen(path);
 				if (!res_info) {
 					res_type = "text/plain";
-					res_code = "HTTP/1.1 404 Not Found";
+					res_code = "404";
+					res_msg = "Not Found";
 					res_body = "Not Found\n";
 					throw res_code;
 				}
 
-				res_code = "HTTP/1.1 200 OK";
+				res_code = "200";
+				res_msg = "OK";
 				if (type[0] != '@') {
 					std::string file_time = res_ftime(path);
 					sprintf(buf, "%d", (int)res_fsize(res_info));
@@ -1115,7 +1134,8 @@ request_top:
 						res_close(res_info);
 						res_info = NULL;
 						res_type = "text/plain";
-						res_code = "HTTP/1.1 304 Not Modified";
+						res_code = "304";
+						res_msg = "Not Modified";
 						res_body = "";
 						throw res_code;
 					}
@@ -1131,13 +1151,16 @@ request_top:
 					res_head += "Date: ";
 					res_head += res_curtime();
 					res_head += "\r\n";
+					if (keep_alive)
+						res_head += "Connection: keep-alive\r\n";
 				} else {
 					if (content_length > 0) {
 						post_data = new char[content_length+1];
 						memset(post_data, 0, content_length+1);
 						if (recv(msgsock, post_data, content_length, 0) <= 0) {
 							res_type = "text/plain";
-							res_code = "HTTP/1.1 500 Bad Request";
+							res_code = "500";
+							res_msg = "Bad Request";
 							res_body = "Bad Request\n";
 							throw res_code;
 						}
@@ -1188,6 +1211,12 @@ request_top:
 					sprintf(buf, "REMOTE_PORT=%d", port);
 					env = buf;
 					envs.push_back(env);
+
+					if (!http_authorization.empty()) {
+						env = "REMOTE_USER=";
+						env += vauth[0];
+						envs.push_back(env);
+					}
 
 					if (!http_user_agent.empty()) {
 						env = "HTTP_USER_AGENT=";
@@ -1317,7 +1346,8 @@ request_top:
 				}
 			} else {
 				res_type = "text/plain";
-				res_code = "HTTP/1.1 500 Bad Request";
+				res_code = "500";
+				res_msg = "Bad Request";
 				res_body = "Bad Request\n";
 				throw res_code;
 			}
@@ -1327,7 +1357,8 @@ request_top:
 		if (res_code.size() == 0) {
 			if (VERBOSE(1)) my_perror(" cached exception");
 			res_type = "text/plain";
-			res_code = "HTTP/1.1 500 Bad Request";
+			res_code = "500";
+			res_msg = "Bad Request";
 			res_body = "Internal Server Error\n";
 		}
 	}
@@ -1343,7 +1374,8 @@ request_top:
 			int ret = recv(msgsock, buf, sizeof(buf), 0);
 			if (ret < 0) {
 				res_type = "text/plain";
-				res_code = "HTTP/1.1 500 Bad Request";
+				res_code = "500";
+				res_msg = "Bad Request";
 				res_body = "Bad Request\n";
 			}
 			content_length -= ret;
@@ -1378,12 +1410,14 @@ request_top:
 			key = "WWW-Authenticate: Basic ";
 			len = strlen(key);
 			if (!strnicmp(ptr, key, len)) {
-				res_code = "HTTP/1.1 401 Unauthorized";
+				res_code = "401";
+				res_msg = "Unauthorized";
 			}
 			key = "Status:";
 			len = strlen(key);
 			if (!strnicmp(ptr, key, len)) {
-				res_code = "HTTP/1.1";
+				res_code = res_proto;
+				res_code += " ";
 				res_code += str.substr(len);
 			}
 			key = "Content-Length:";
@@ -1394,12 +1428,28 @@ request_top:
 			res_head += ptr;
 			res_head += "\r\n";
 		}
-		if (!res_keep_alive)
+		if (!res_keep_alive) {
 			keep_alive = false;
+			if (http_connection.empty()) {
+				res_head += "Connection: closed\r\n";
+			}
+		}
 	}
 
 	if (res_code.size()) {
+		/*
+		if (res_proto == "HTTP/1.1") {
+			send(msgsock, "Status: ", 8, 0);
+			send(msgsock, res_code.c_str(), (int)res_code.size(), 0);
+			send(msgsock, "\r\n", 2, 0);
+		}
+		*/
+
+		send(msgsock, res_proto.c_str(), (int)res_proto.size(), 0);
+		send(msgsock, " ", 1, 0);
 		send(msgsock, res_code.c_str(), (int)res_code.size(), 0);
+		send(msgsock, " ", 1, 0);
+		send(msgsock, res_msg.c_str(), (int)res_msg.size(), 0);
 		send(msgsock, "\r\n", 2, 0);
 	}
 
@@ -1470,6 +1520,9 @@ request_top:
 request_end:
 	shutdown(msgsock, SD_BOTH);
 	closesocket(msgsock);
+#ifdef _WIN32
+	_endthread();
+#endif
 
 	return NULL;
 }
@@ -1526,9 +1579,10 @@ void* watch_thread(void* param)
 		int client_len = sizeof(client);
 		memset(&client, 0, sizeof(client));
 		msgsock = accept(httpd->sock, (struct sockaddr *)&client, (socklen_t *)&client_len);
+		if (VERBOSE(3)) printf("accepted socket %d\n", msgsock);
 		if (msgsock == -1) {
-			closesocket(httpd->sock);
-			httpd->sock = -1;
+			if (VERBOSE(1)) printf("failed to accept socket(%d)\n", errno);
+			closesocket(msgsock);
 			/*
 			break;
 			*/
@@ -1543,15 +1597,34 @@ void* watch_thread(void* param)
 			pHttpdInfo->address = address;
 			pHttpdInfo->port = client.sin_port;
 
+			int value;
+
+			value = 1;
+			setsockopt(msgsock, IPPROTO_TCP, TCP_NODELAY, (char*)&value, sizeof(value));
+			value = 3;
+			setsockopt(msgsock, SOL_SOCKET, SO_SNDTIMEO, (char*)&value, sizeof(value));
+			value = 3;
+			setsockopt(msgsock, SOL_SOCKET, SO_RCVTIMEO, (char*)&value, sizeof(value));
+
 #ifdef _WIN32
-			HANDLE th = (HANDLE)_beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo);
-			while(!CloseHandle(th));
+			uintptr_t th;
+			while ((int)(th = _beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo)) == -1) {
+				Sleep(1);
+			}
 #else
 			pthread_t pth;
-			pthread_create(&pth, NULL, response_thread, (void*)pHttpdInfo);
+			while (pthread_create(&pth, NULL, response_thread, (void*)pHttpdInfo) != 0) {
+				usleep(100);
+			}
+			pthread_detach(pth);
 #endif
 		}
 	}
+
+#ifdef _WIN32
+	_endthread();
+#endif
+
 	return NULL;
 }
 

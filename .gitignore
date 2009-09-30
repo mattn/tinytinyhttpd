@@ -1,0 +1,5 @@
+Makefile
+Makefile.in
+configure
+config.h
+autom4te.cache
