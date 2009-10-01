@@ -222,6 +222,7 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 static bool res_iscgi(std::string& file, std::string& path_info, std::string& script_name, server::MimeTypes& mime_types, std::string& type) {
 	std::vector<std::string> split_path = split_string(file, "/");
 	std::string path = "";
+	server::MimeTypes::iterator it_mime;
 
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
 		if (it->empty()) continue;
@@ -230,19 +231,27 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
     	struct stat	st;
 		if (stat((char *)path.c_str(), &st))
 			continue;
-		server::MimeTypes::iterator it_mime;
 		for(it_mime = mime_types.begin(); it_mime != mime_types.end(); it_mime++) {
 			if (it_mime->second[0] != '@') continue;
-			std::string match = ".";
-			match += it_mime->first;
-			if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
-				type = it_mime->second;
-				path_info = file.c_str() + path.size();
-				script_name.resize(script_name.size() - path_info.size());
-				file = path;
-				if (script_name == "/")
-					script_name += *it;
-				return true;
+			if (it_mime->first[0] == '@') {
+				if (!strncmp(path.c_str()+path.size()-it_mime->first.size()+1, it_mime->first.c_str()+1, it_mime->first.size()-1)) {
+					type = it_mime->second;
+					path_info = file.c_str() + path.size();
+					script_name.resize(script_name.size() - path_info.size());
+					return true;
+				}
+			} else {
+				std::string match = ".";
+				match += it_mime->first;
+				if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+					type = it_mime->second;
+					path_info = file.c_str() + path.size();
+					script_name.resize(script_name.size() - path_info.size());
+					file = path;
+					if (script_name == "/")
+						script_name += *it;
+					return true;
+				}
 			}
 		}
 	}
