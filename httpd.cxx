@@ -1613,7 +1613,12 @@ void* watch_thread(void* param)
 		httpd->hostaddr.push_back(address);
 		// XXX: overwrite
 		httpd->port = port;
-		if (VERBOSE(1)) printf("server started http://%s:%s/\n", address, port);
+		if (VERBOSE(1)) {
+			if (getnameinfo((struct sockaddr*)sa, sa->sa_len, address, sizeof(address), port,
+				sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV))
+				printf("could not get hostname");
+			printf("server started. host: %s port: %s\n", address, port);
+		}
 	}
 
 	freeaddrinfo(res0);
