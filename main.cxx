@@ -106,7 +106,7 @@ bool loadAuthfile(const char* filename, std::vector<tthttpd::server::AuthInfo>& 
 int main(int argc, char* argv[]) {
 	int c;
 	const char* root = ".";
-	unsigned short port = 8080;
+	const char* port = "www";
 	const char* cfg = NULL;
 	bool spawn_exec = false;
 	int verbose = 0;
@@ -119,7 +119,7 @@ int main(int argc, char* argv[]) {
 	opterr = 0;
 	while ((c = getopt(argc, (char**)argv, "p:c:d:xvh") != -1)) {
 		switch (optopt) {
-		case 'p': port = (unsigned short)atol(optarg); break;
+		case 'p': port = optarg; break;
 		case 'c': cfg = optarg; break;
 		case 'd': root = optarg; break;
 		case 'v': verbose++; break;
@@ -158,8 +158,10 @@ int main(int argc, char* argv[]) {
 #endif
 		val = configs["global"]["root"];
 		if (val.size()) httpd.bindRoot(val);
+		val = configs["global"]["hostname"];
+		if (val.size()) httpd.hostname = val;
 		val = configs["global"]["port"];
-		if (val.size()) httpd.port = (unsigned short)atoi(val.c_str());
+		if (val.size()) httpd.port = val;
 		val = configs["global"]["indexpages"];
 		if (val.size()) httpd.default_pages = tthttpd::split_string(val, ",");
 		val = configs["global"]["charset"];
