@@ -145,7 +145,6 @@ int main(int argc, char* argv[]) {
 	httpd.spawn_executable = spawn_exec;
 	httpd.verbose_mode = verbose;
 	httpd.family = family;
-	printf("ipv? %d\b", httpd.family);
 	if (cfg) {
 		ConfigList configs = loadConfigs(cfg);
 		Config config;
