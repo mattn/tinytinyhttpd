@@ -103,6 +103,7 @@ private:
 
 public:
 	std::vector<int> socks;
+	int family;
 	std::string hostname;
 	std::vector<std::string> hostaddr;
 	std::string root;

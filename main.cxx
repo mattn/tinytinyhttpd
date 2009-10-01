@@ -110,6 +110,8 @@ int main(int argc, char* argv[]) {
 	const char* cfg = NULL;
 	bool spawn_exec = false;
 	int verbose = 0;
+	int family = AF_UNSPEC;
+
 
 #ifdef _WIN32
 	WSADATA wsaData;
@@ -117,8 +119,10 @@ int main(int argc, char* argv[]) {
 #endif
 
 	opterr = 0;
-	while ((c = getopt(argc, (char**)argv, "p:c:d:xvh") != -1)) {
+	while ((c = getopt(argc, (char**)argv, "46p:c:d:xvh") != -1)) {
 		switch (optopt) {
+		case '4': family = AF_INET;  break;
+		case '6': family = AF_INET6; break;
 		case 'p': port = optarg; break;
 		case 'c': cfg = optarg; break;
 		case 'd': root = optarg; break;
@@ -140,6 +144,8 @@ int main(int argc, char* argv[]) {
 	httpd.bindRoot(root);
 	httpd.spawn_executable = spawn_exec;
 	httpd.verbose_mode = verbose;
+	httpd.family = family;
+	printf("ipv? %d\b", httpd.family);
 	if (cfg) {
 		ConfigList configs = loadConfigs(cfg);
 		Config config;
@@ -158,6 +164,10 @@ int main(int argc, char* argv[]) {
 #endif
 		val = configs["global"]["root"];
 		if (val.size()) httpd.bindRoot(val);
+		val = configs["global"]["ipv4_only"];
+		if (val == "on") httpd.family = AF_INET;
+		val = configs["global"]["ipv6_only"];
+		if (val == "on") httpd.family = AF_INET6;
 		val = configs["global"]["hostname"];
 		if (val.size()) httpd.hostname = val;
 		val = configs["global"]["port"];
@@ -201,7 +211,7 @@ int main(int argc, char* argv[]) {
 			httpd.basic_auths.push_back(basic_auth_info);
 		}
 
-
+	printf("ipv? %d\b", httpd.family);
 	} else {
 #ifdef _WIN32
 	httpd.mime_types["cgi"] = "@c:/strawberry/perl/bin/perl.exe";

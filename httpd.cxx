@@ -1557,7 +1557,7 @@ void* watch_thread(void* param)
 #endif
 
 	memset(&hints, 0, sizeof(hints));
-	hints.ai_family = AF_UNSPEC; /* XXX */
+	hints.ai_family = httpd->family;
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_socktype = SOCK_STREAM;
 
