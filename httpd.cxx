@@ -1659,7 +1659,7 @@ void* watch_thread(void* param)
 
 				if (getnameinfo((struct sockaddr*)&client, client_len, address, sizeof(address), port,
 					sizeof(port), numeric_host | NI_NUMERICSERV))
-					fprintf(stderr, "could not get hostname");
+					fprintf(stderr, "could not get peername");
 
 				server::HttpdInfo *pHttpdInfo = new server::HttpdInfo;
 				pHttpdInfo->msgsock = msgsock;
