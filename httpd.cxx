@@ -1548,7 +1548,7 @@ void* watch_thread(void* param)
 	int numeric_host = 0;
 
 	// privsep?
-	if (httpd->chroot.size() == 0) {
+	if (httpd->chroot.size() != 0) {
 		numeric_host = NI_NUMERICHOST;
 	}
 
