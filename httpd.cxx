@@ -1608,15 +1608,19 @@ void* watch_thread(void* param)
 
 		char address[NI_MAXHOST], port[NI_MAXSERV];
 		if (getnameinfo((struct sockaddr*)sa, sa->sa_len, address, sizeof(address), port,
-			sizeof(port), numeric_host | NI_NUMERICSERV))
-					printf("could not get hostname");
+			sizeof(port), numeric_host | NI_NUMERICSERV)) {
+			fprintf(stderr, "could not get hostname");
+			continue;
+		}
 		httpd->hostaddr.push_back(address);
 		// XXX: overwrite
 		httpd->port = port;
 		if (VERBOSE(1)) {
 			if (getnameinfo((struct sockaddr*)sa, sa->sa_len, address, sizeof(address), port,
-				sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV))
-				printf("could not get hostname");
+				sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV)) {
+				fprintf(stderr, "could not get hostname");
+				continue;
+			}
 			printf("server started. host: %s port: %s\n", address, port);
 		}
 	}
