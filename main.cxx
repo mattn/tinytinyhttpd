@@ -211,7 +211,6 @@ int main(int argc, char* argv[]) {
 			httpd.basic_auths.push_back(basic_auth_info);
 		}
 
-	printf("ipv? %d\b", httpd.family);
 	} else {
 #ifdef _WIN32
 	httpd.mime_types["cgi"] = "@c:/strawberry/perl/bin/perl.exe";
