@@ -1544,7 +1544,6 @@ void* watch_thread(void* param)
 	char ntop[NI_MAXHOST], strport[NI_MAXSERV];
 	u_int8_t salen;
 	int on;
-
 	int numeric_host = 0;
 
 	// privsep?
