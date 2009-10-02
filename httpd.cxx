@@ -42,9 +42,9 @@
 #define __solaris__
 #endif
 
-#if defined linux || defined solaris
+#if defined LINUX_SENDFILE_API
 #include <sys/sendfile.h>
-#elif defined (__FreeBSD__) || defined (__APPLE__)
+#elif FREEBSD_SENDFILE_API
 #include <sys/uio.h>
 #elif defined _WIN32
 #include <mswsock.h>
@@ -1684,9 +1684,9 @@ request_done:
 		unsigned long total = res_info->size;
 		int sent = 0;
 		if (total != (unsigned long)-1) {
-#if defined linux || defined __solaris__
+#if defined LINUX_SENDFILE_API
 			sent = sendfile(msgsock, fileno(res_info->read), NULL, total);
-#elif defined __FreeBSD__
+#elif defined FREEBSD_SENDFILE_API
 			sendfile(msgsock, fileno(res_info->read), total, &sent, NULL, 0);
 #elif defined _WIN32
 			sent = TransmitFile(
@@ -1848,23 +1848,21 @@ void* watch_thread(void* param)
 
 		httpd->socks.push_back(listen_sock);
 
-		char address[NI_MAXHOST], port[NI_MAXSERV];
-		if (getnameinfo((struct sockaddr*)sa, sizeof(struct sockaddr_storage), address, sizeof(address), port,
-			sizeof(port), numeric_host | NI_NUMERICSERV)) {
-			fprintf(stderr, "could not get hostname\n");
-			continue;
-		}
-		httpd->hostaddr.push_back(address);
-		// XXX: overwrite
-		httpd->port = port;
-		if (VERBOSE(1)) {
+		if (!(numeric_host == 0)) {
+			char address[NI_MAXHOST], port[NI_MAXSERV];
 			if (getnameinfo((struct sockaddr*)sa, sizeof(struct sockaddr_storage), address, sizeof(address), port,
-				sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV)) {
+				sizeof(port), numeric_host | NI_NUMERICSERV)) {
 				fprintf(stderr, "could not get hostname\n");
 				continue;
 			}
-			printf("server started. host: %s port: %s\n", address, port);
 		}
+		if (VERBOSE(1)) {
+			printf("server started. host: %s port: %s\n", ntop, strport);
+		}
+
+		httpd->hostaddr.push_back(ntop);
+		// XXX: overwrite
+		httpd->port = strport;
 	}
 
 	freeaddrinfo(res0);
@@ -1882,6 +1880,7 @@ void* watch_thread(void* param)
 		int fds, nfds;
 
 		memset(fdset, 0, fdsetsz);
+
 		for(fds = 0; fds < nserver; fds++)
 			FD_SET(httpd->socks[fds], fdset);
 		nfds = select(maxfd + 1, fdset, NULL, NULL, NULL);
