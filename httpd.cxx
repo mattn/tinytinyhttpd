@@ -1835,16 +1835,18 @@ void* watch_thread(void* param)
 
 	freeaddrinfo(res0);
 
-	struct fd_set *fdset = new fd_set[httpd->socks.size()];
+	int nserver = httpd->socks.size();
+
+	struct fd_set *fdset = new fd_set[nserver];
 
 	int maxfd = 0;
-	for(int fds = 0; fds < (int)httpd->socks.size(); fds++) {
+	for(int fds = 0; fds < nserver; fds++) {
                 if (httpd->socks[fds] > maxfd)
                         maxfd = httpd->socks[fds];
         }
 
 	int fds, nfds;
-	int nserver = httpd->socks.size();
+
 	for(;;) {
 		int fds, nfds;
 
@@ -1854,13 +1856,13 @@ void* watch_thread(void* param)
                 fdset = (fd_set *)malloc(fdsetsz);
                 memset(fdset, 0, fdsetsz);
 
-		for(fds = 0; fds < (int)httpd->socks.size(); fds++)
+		for(fds = 0; fds < nserver; fds++)
 			FD_SET(httpd->socks[fds], fdset);
 		nfds = select(maxfd + 1, fdset, NULL, NULL, NULL);
 		if (nfds == -1) {
 			my_perror("select");
 		}
-		for(fds = 0; fds < (int)httpd->socks.size(); fds++) {
+		for(fds = 0; fds < nserver; fds++) {
 			int sock = httpd->socks[fds];
 
 			if (!FD_ISSET(sock, &fdset[fds]))
