@@ -37,7 +37,7 @@ AC_FUNC_REALLOC
 AC_FUNC_SELECT_ARGTYPES
 AC_TYPE_SIGNAL
 AC_FUNC_STAT
-AC_CHECK_FUNCS([dup2 gethostbyname gethostname inet_ntoa mblen memset realpath select socket strchr strpbrk wcwidth poll])
+AC_CHECK_FUNCS([dup2 gethostbyname gethostname getaddrinfo inet_ntoa mblen memset realpath select socket strchr strpbrk wcwidth poll])
 
 # pthread
 dnl FIXME: do we need -D_REENTRANT here?
