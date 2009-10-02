@@ -1316,7 +1316,7 @@ void set_priv(const char *chuser_name, const char *chroot_dir, const char *title
 
 }
 
-#if !defined(HAVE_POLL)
+#if !defined(HAVE_POLL) && !defined(_WIN32)
 
 /*
  * Copyright (c) 2004, 2005, 2007 Darren Tucker (dtucker at zip com au).
