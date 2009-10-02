@@ -20,6 +20,9 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 #define _CRT_SECURE_NO_DEPRECATE
 #ifdef _WIN32
 #include <windows.h>
@@ -39,9 +42,6 @@
 #include <grp.h>
 #endif
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 #include "utils.h"
 #include <sstream>
 

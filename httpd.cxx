@@ -20,6 +20,9 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include "httpd.h"
 #include <time.h>
 #include <sys/stat.h>
@@ -44,17 +47,13 @@
 
 #if defined LINUX_SENDFILE_API
 #include <sys/sendfile.h>
-#elif FREEBSD_SENDFILE_API
+#elif defined FREEBSD_SENDFILE_API
 #include <sys/uio.h>
 #elif defined _WIN32
 #include <mswsock.h>
 #endif
 
 extern char* crypt(const char *key, const char *setting);
-
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 
 namespace tthttpd {
 
@@ -1689,14 +1688,14 @@ request_done:
 #elif defined FREEBSD_SENDFILE_API
 			sendfile(msgsock, fileno(res_info->read), total, &sent, NULL, 0);
 #elif defined _WIN32
-			sent = TransmitFile(
+			if (TransmitFile(
 				msgsock,
 				res_info->read,
 				total,
 				0,
 				NULL,
 				NULL,
-				0);
+				0)) sent = count;
 #endif
 		}
 		if (!sent) {
