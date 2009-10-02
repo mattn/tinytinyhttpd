@@ -1727,6 +1727,7 @@ request_done:
 request_end:
 	shutdown(msgsock, SD_BOTH);
 	closesocket(msgsock);
+	delete pHttpdInfo;
 #ifdef _WIN32
 	_endthread();
 #endif
