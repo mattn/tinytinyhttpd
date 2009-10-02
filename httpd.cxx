@@ -35,6 +35,8 @@
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#else
+#include <mswsock.h>
 #endif
 
 extern char* crypt(const char *key, const char *setting);
@@ -1357,7 +1359,8 @@ request_top:
 				res_msg = "OK";
 				if (type[0] != '@') {
 					std::string file_time = res_ftime(path);
-					sprintf(buf, "%d", (int)res_fsize(res_info));
+					res_info->size = res_fsize(res_info);
+					sprintf(buf, "%d", (int)res_info->size);
 					if (if_modified_since.size() && if_modified_since == file_time) {
 						res_close(res_info);
 						res_info = NULL;
@@ -1681,12 +1684,27 @@ request_done:
 	if (res_info) {
 		send(msgsock, "\r\n", 2, 0);
 		unsigned long total = res_info->size;
-		while(total != 0) {
-			memset(buf, 0, sizeof(buf));
-			unsigned long read = res_read(res_info, buf, sizeof(buf));
-			if (read == 0) break;
-			send(msgsock, buf, read > total ? total : read, 0);
-			total -= read;
+		int sent = 0;
+#ifdef _WIN32
+		if (total != (unsigned long)-1) {
+			sent = TransmitFile(
+				msgsock,
+				res_info->read,
+				total,
+				0,
+				NULL,
+				NULL,
+				0);
+		}
+#endif
+		if (!sent) {
+			while(total != 0) {
+				memset(buf, 0, sizeof(buf));
+				unsigned long read = res_read(res_info, buf, sizeof(buf));
+				if (read == 0) break;
+				send(msgsock, buf, read > total ? total : read, 0);
+				total -= read;
+			}
 		}
 		res_close(res_info);
 		res_info = NULL;
