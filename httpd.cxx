@@ -28,7 +28,6 @@
 #include <string.h>
 #include <errno.h>
 #ifndef _WIN32
-#include <poll.h>
 #include <signal.h>
 #include <dirent.h>
 #include <sys/types.h>
@@ -56,6 +55,19 @@ typedef int socklen_t;
 #if !defined(EWOULDBLOCK) && defined(WSAEWOULDBLOCK)
 #define EWOULDBLOCK WSAEWOULDBLOCK
 #endif
+
+#ifndef NBBY
+#define NBBY    8          /* number of bits in a byte */
+#endif
+#ifndef NFDBITS
+#define NFDBITS (sizeof(fd_mask) * NBBY)        /* bits per mask */
+#endif
+
+#ifndef howmany
+#define howmany(x,y)    (((x)+((y)-1))/(y))
+#endif
+
+typedef long fd_mask;
 
 #ifndef S_ISREG
 #define S_ISREG(x) (x & S_IFREG)
@@ -267,124 +279,6 @@ int getaddrinfo(const char *hostname, const char *servname,
 	
 	return EAI_NODATA;
 }
-#endif
-
-#if !defined(HAVE_POLL) && !defined(HAVE_POLL_H) && !defined(_WIN32)
-
-/*
- * Copyright (c) 2004, 2005, 2007 Darren Tucker (dtucker at zip com au).
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- */
-
-#ifdef HAVE_SYS_SELECT_H
-# include <sys/select.h>
-#endif
-
-#include <stdlib.h>
-#include <errno.h>
-
-namespace std {
-
-/*
- * A minimal implementation of poll(2), built on top of select(2).
- *
- * Only supports POLLIN and POLLOUT flags in pfd.events, and POLLIN, POLLOUT
- * and POLLERR flags in revents.
- *
- * Supports pfd.fd = -1 meaning "unused" although it's not standard.
- */
-
-int
-poll(struct pollfd *fds, nfds_t nfds, int timeout)
-{
-	nfds_t i;
-	int saved_errno, ret, fd, maxfd = 0;
-	fd_set *readfds = NULL, *writefds = NULL, *exceptfds = NULL;
-	size_t nmemb;
-	struct timeval tv, *tvp = NULL;
-
-	for (i = 0; i < nfds; i++) {
-		if (fd >= FD_SETSIZE) {
-			errno = EINVAL;
-			return -1;
-		}
-		maxfd = MAX(maxfd, fds[i].fd);
-	}
-
-	nmemb = howmany(maxfd + 1 , NFDBITS);
-	if ((readfds = calloc(nmemb, sizeof(fd_mask))) == NULL ||
-	    (writefds = calloc(nmemb, sizeof(fd_mask))) == NULL ||
-	    (exceptfds = calloc(nmemb, sizeof(fd_mask))) == NULL) {
-		saved_errno = ENOMEM;
-		ret = -1;
-		goto out;
-	}
-
-	/* populate event bit vectors for the events we're interested in */
-	for (i = 0; i < nfds; i++) {
-		fd = fds[i].fd;
-		if (fd == -1)
-			continue;
-		if (fds[i].events & POLLIN) {
-			FD_SET(fd, readfds);
-			FD_SET(fd, exceptfds);
-		}
-		if (fds[i].events & POLLOUT) {
-			FD_SET(fd, writefds);
-			FD_SET(fd, exceptfds);
-		}
-	}
-
-	/* poll timeout is msec, select is timeval (sec + usec) */
-	if (timeout >= 0) {
-		tv.tv_sec = timeout / 1000;
-		tv.tv_usec = (timeout % 1000) * 1000;
-		tvp = &tv;
-	}
-
-	ret = select(maxfd + 1, readfds, writefds, exceptfds, tvp);
-	saved_errno = errno;
-
-	/* scan through select results and set poll() flags */
-	for (i = 0; i < nfds; i++) {
-		fd = fds[i].fd;
-		fds[i].revents = 0;
-		if (fd == -1)
-			continue;
-		if (FD_ISSET(fd, readfds)) {
-			fds[i].revents |= POLLIN;
-		}
-		if (FD_ISSET(fd, writefds)) {
-			fds[i].revents |= POLLOUT;
-		}
-		if (FD_ISSET(fd, exceptfds)) {
-			fds[i].revents |= POLLERR;
-		}
-	}
-
-out:
-	if (readfds != NULL)
-		free(readfds);
-	if (writefds != NULL)
-		free(writefds);
-	if (exceptfds != NULL)
-		free(exceptfds);
-	if (ret == -1)
-		errno = saved_errno;
-	return ret;
-}
-
 #endif
 
 typedef struct {
@@ -1947,54 +1841,34 @@ void* watch_thread(void* param)
 			}
 			printf("server started. host: %s port: %s\n", address, port);
 		}
-
-		int value = 1;
-		setsockopt(listen_sock, IPPROTO_TCP, TCP_NODELAY, (char*)&value, sizeof(value));
 	}
 
 	freeaddrinfo(res0);
 
-#ifdef _WIN32
-	struct fd_set *pfd = new fd_set[httpd->socks.size()];
-#else
-	struct pollfd *pfd = new pollfd[httpd->socks.size()];
-#endif
+	unsigned int maxfd = 0;
+	for(int fds = 0; fds < (int)httpd->socks.size(); fds++) {
+		if (httpd->socks[fds] > maxfd)
+			maxfd = httpd->socks[fds];
+	}
+	int fdsetsz = howmany(maxfd + 1, NFDBITS) * sizeof(fd_mask);
+	struct fd_set *fdset = (fd_set *)malloc(fdsetsz);
 
-	int fds, nfds;
-	int nserver = httpd->socks.size();
 	for(;;) {
-#ifdef _WIN32
-		for(fds = 0; fds < nserver; fds++) {
-			FD_ZERO(&pfd[fds]);
-			FD_SET(httpd->socks[fds], &pfd[fds]);
-		}
-		nfds = select(nserver, pfd, NULL, NULL, NULL);
+		int fds, nfds;
+
+		memset(fdset, 0, fdsetsz);
+		for(fds = 0; fds < (int)httpd->socks.size(); fds++)
+			FD_SET(httpd->socks[fds], fdset);
+		nfds = select(maxfd + 1, fdset, NULL, NULL, NULL);
 		if (nfds == -1) {
 			my_perror("select");
+			continue;
 		}
-#else
-		for(fds = 0; fds < nserver; fds++) {
-			pfd[fds].fd = httpd->socks[fds];
-			pfd[fds].events = POLLIN;
-		}
-		nfds = poll(pfd, nserver, -1);
-		if (nfds == -1) {
-			for(fds = 0; fds < nserver; fds++) {
-				if (pfd[fds].revents & (POLLERR | POLLHUP | POLLNVAL))
-					my_perror("poll");
-			}
-		}
-#endif
-		for(fds = 0; fds < nserver; fds++) {
+		for(fds = 0; fds < (int)httpd->socks.size(); fds++) {
 			int sock = httpd->socks[fds];
 
-#ifdef _WIN32
-			if (!FD_ISSET(sock, &pfd[fds]))
+			if (!FD_ISSET(sock, &fdset[fds]))
 				continue;
-#else
-			if (pfd[fds].revents != POLLIN)
-				continue;
-#endif
 
 			struct sockaddr_storage client;
 			int client_len = sizeof(client);
@@ -2009,17 +1883,12 @@ void* watch_thread(void* param)
 				  break;
 				*/
 				continue;
-			}
-			else {
+			} else {
 				char address[NI_MAXHOST], port[NI_MAXSERV];
 
-				if (httpd->family == AF_INET)
-					strcpy(address, inet_ntoa(((struct sockaddr_in *)&client)->sin_addr));
-				else {
-					if (getnameinfo((struct sockaddr*)&client, client_len, address, sizeof(address), port,
-						sizeof(port), numeric_host | NI_NUMERICHOST | NI_NUMERICSERV))
-						fprintf(stderr, "could not get peername\n");
-				}
+				if (getnameinfo((struct sockaddr*)&client, client_len, address, sizeof(address), port,
+					sizeof(port), numeric_host | NI_NUMERICSERV))
+					fprintf(stderr, "could not get peername\n");
 
 				server::HttpdInfo *pHttpdInfo = new server::HttpdInfo;
 				pHttpdInfo->msgsock = msgsock;
@@ -2057,7 +1926,7 @@ void* watch_thread(void* param)
 	_endthread();
 #endif
 
-	delete[] pfd;
+	delete[] fdset;
 
 	return NULL;
 }
