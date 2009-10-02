@@ -1,8 +1,9 @@
 #include "httpd.h"
 #include <stdio.h>
 #include <string.h>
-
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 int  opterr = 1;
 int  optind = 1;
@@ -128,16 +129,24 @@ int main(int argc, char* argv[]) {
 		case 'd': root = optarg; break;
 		case 'v': verbose++; break;
 		case 'x': spawn_exec = true; break;
-		case 'h':
-			  std::cerr << "usage: " << argv[0] << " [-v] [-p server-port] [-c config-file] [-d root-dir]" << std::endl;
-			  exit(1);
-			  break;
+		case 'h': argc = 0; break;
 		case '?': break;
-		default:
-			argc = 0;
-			break;
+		default: argc = 0; break;
 		}
 		optarg = NULL;
+	}
+
+	if (argc == 0) {
+		std::cerr << "usage: " << argv[0]
+			<< " [-4|-6]"
+			<< " [-p server-port]"
+			<< " [-c config-file]"
+			<< " [-d root-dir]"
+			<< " [-v]"
+			<< " [-x]"
+			<< " [-h]"
+			<< std::endl;
+		exit(1);
 	}
 
 	tthttpd::server httpd(port);

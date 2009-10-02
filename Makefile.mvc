@@ -1,0 +1,15 @@
+.SUFFIXES: .cxx .obj
+
+all : tthttpd.exe
+
+tthttpd.exe : main.obj httpd.obj utils.obj
+	link /nologo /out:$@ main.obj httpd.obj utils.obj /NODEFAULTLIB:libc.lib /nodefaultlib:libcp.lib
+
+httpd.cxx : httpd.h utils.h
+utils.cxx : utils.h
+main.cxx : httpd.cxx
+.cxx.obj :
+	cl /nologo /MT /W3 /UUNICODE /U_UNICODE /EHsc -c $<
+
+clean :
+	del /S *.obj tthttpd.exe
