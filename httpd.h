@@ -68,7 +68,8 @@ public:
 		int msgsock;
 		server *httpd;
 		std::string address;
-		short port;
+		std::string port;
+		int servno;
 	} HttpdInfo;
 	typedef struct {
 		std::string user;
@@ -101,14 +102,15 @@ private:
 #endif
 
 public:
-	int sock;
+	std::vector<int> socks;
+	int family;
 	std::string hostname;
-	std::string hostaddr;
+	std::vector<std::string> hostaddr;
 	std::string root;
 	std::string fs_charset;
 	std::string chroot;
 	std::string user;
-	unsigned short port;
+	std::string port;
 	BasicAuths basic_auths;
 	AcceptAuths accept_auths;
 	AcceptIPs accept_ips;
@@ -121,8 +123,8 @@ public:
 	int verbose_mode;
 
 	void initialize() {
-		sock = -1;
-		port = 80;
+		hostname = "localhost";
+		port = "www";
 		fs_charset = "utf-8";
 		thread = 0;
 		loggerfunc = NULL;
@@ -146,11 +148,11 @@ public:
 	server() {
 		initialize();
 	}
-	server(unsigned short _port) {
+	server(std::string _port) {
 		initialize();
 		port = _port;
 	}
-	server(unsigned short _port, std::string _target) {
+	server(std::string _port, std::string _target) {
 		initialize();
 		port = _port;
 	}

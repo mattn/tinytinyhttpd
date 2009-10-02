@@ -12,7 +12,6 @@ AC_PROG_CXX
 AC_PROG_CC
 
 # Checks for libraries.
-AC_CHECK_LIB([pthread], [pthread_create])
 
 # Checks for header files.
 AC_HEADER_DIRENT
@@ -39,6 +38,15 @@ AC_FUNC_SELECT_ARGTYPES
 AC_TYPE_SIGNAL
 AC_FUNC_STAT
 AC_CHECK_FUNCS([dup2 gethostbyname gethostname inet_ntoa mblen memset realpath select socket strchr strpbrk wcwidth])
+
+# pthread
+dnl FIXME: do we need -D_REENTRANT here?
+ACX_PTHREAD([
+LIBS="$LIBS $PTHREAD_LIBS"
+CFLAGS="$CFLAGS $PTHREAD_CFLAGS -D_REENTRANT"
+CXXFLAGS="$CXXFLAGS $PTHREAD_CFLAGS -D_REENTRANT"
+CC="$PTHREAD_CC"
+], [ AC_MSG_RESULT(no) ])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT

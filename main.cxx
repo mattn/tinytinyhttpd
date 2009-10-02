@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "config.h"
+
 int  opterr = 1;
 int  optind = 1;
 int  optopt;
@@ -104,10 +106,12 @@ bool loadAuthfile(const char* filename, std::vector<tthttpd::server::AuthInfo>& 
 int main(int argc, char* argv[]) {
 	int c;
 	const char* root = ".";
-	unsigned short port = 8080;
+	const char* port = "www";
 	const char* cfg = NULL;
 	bool spawn_exec = false;
 	int verbose = 0;
+	int family = AF_UNSPEC;
+
 
 #ifdef _WIN32
 	WSADATA wsaData;
@@ -115,9 +119,11 @@ int main(int argc, char* argv[]) {
 #endif
 
 	opterr = 0;
-	while ((c = getopt(argc, (char**)argv, "p:c:d:xvh") != -1)) {
+	while ((c = getopt(argc, (char**)argv, "46p:c:d:xvh") != -1)) {
 		switch (optopt) {
-		case 'p': port = (unsigned short)atol(optarg); break;
+		case '4': family = AF_INET;  break;
+		case '6': family = AF_INET6; break;
+		case 'p': port = optarg; break;
 		case 'c': cfg = optarg; break;
 		case 'd': root = optarg; break;
 		case 'v': verbose++; break;
@@ -138,6 +144,7 @@ int main(int argc, char* argv[]) {
 	httpd.bindRoot(root);
 	httpd.spawn_executable = spawn_exec;
 	httpd.verbose_mode = verbose;
+	httpd.family = family;
 	if (cfg) {
 		ConfigList configs = loadConfigs(cfg);
 		Config config;
@@ -156,8 +163,14 @@ int main(int argc, char* argv[]) {
 #endif
 		val = configs["global"]["root"];
 		if (val.size()) httpd.bindRoot(val);
+		val = configs["global"]["ipv4_only"];
+		if (val == "on") httpd.family = AF_INET;
+		val = configs["global"]["ipv6_only"];
+		if (val == "on") httpd.family = AF_INET6;
+		val = configs["global"]["hostname"];
+		if (val.size()) httpd.hostname = val;
 		val = configs["global"]["port"];
-		if (val.size()) httpd.port = (unsigned short)atoi(val.c_str());
+		if (val.size()) httpd.port = val;
 		val = configs["global"]["indexpages"];
 		if (val.size()) httpd.default_pages = tthttpd::split_string(val, ",");
 		val = configs["global"]["charset"];
@@ -196,7 +209,6 @@ int main(int argc, char* argv[]) {
 				basic_auth_info.auths = auth_infos;
 			httpd.basic_auths.push_back(basic_auth_info);
 		}
-
 
 	} else {
 #ifdef _WIN32

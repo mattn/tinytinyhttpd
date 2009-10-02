@@ -27,15 +27,20 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <poll.h>
 #ifndef _WIN32
 #include <signal.h>
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <netinet/tcp.h>
+#include <sys/socket.h>
+#include <netdb.h>
 #endif
 
 extern char* crypt(const char *key, const char *setting);
+
+#include "config.h"
 
 namespace tthttpd {
 
@@ -761,7 +766,8 @@ void* response_thread(void* param)
 	server *httpd = pHttpdInfo->httpd;
 	int msgsock = (int)pHttpdInfo->msgsock;
 	std::string address = pHttpdInfo->address;
-	short port = pHttpdInfo->port;
+	std::string port = pHttpdInfo->port;
+	int servno = pHttpdInfo->servno;
 	std::string str, req, ret;
 	std::vector<std::string> vparam;
 	std::vector<std::string> vauth;
@@ -1192,7 +1198,7 @@ request_top:
 
 					std::string env;
 
-					sprintf(buf, "HTTP_HOST=%s:%d", httpd->hostname.c_str(), httpd->port);
+					sprintf(buf, "HTTP_HOST=%s:%d", httpd->hostname.c_str(), httpd->port.c_str());
 					env = buf;
 					envs.push_back(env);
 
@@ -1200,14 +1206,14 @@ request_top:
 					envs.push_back(env);
 
 					env = "SERVER_ADDR=";
-					env += httpd->hostaddr;
+					env += httpd->hostaddr[servno];
 					envs.push_back(env);
 
 					env = "SERVER_NAME=";
 					env += httpd->hostname;
 					envs.push_back(env);
 
-					sprintf(buf, "SERVER_PORT=%d", httpd->port);
+					sprintf(buf, "SERVER_PORT=%d", httpd->port.c_str());
 					env = buf;
 					envs.push_back(env);
 
@@ -1539,98 +1545,176 @@ void* watch_thread(void* param)
 
 	server *httpd = (server*)param;
 	int msgsock;
-	struct sockaddr_in server;
+
+	struct sockaddr *sa;
+	struct addrinfo hints;
+	struct addrinfo *res, *res0;
+	int error;
+	char ntop[NI_MAXHOST], strport[NI_MAXSERV];
+	u_int8_t salen;
+	int on;
+	int numeric_host = 0;
+
+	// privsep?
+	if (httpd->chroot.size() != 0) {
+		numeric_host = NI_NUMERICHOST;
+	}
 
 #ifdef SIGPIPE
 	signal(SIGPIPE, SIG_IGN);
 #endif
-	httpd->sock = socket(PF_INET, SOCK_STREAM, 0);
-	if (httpd->sock < 0) { 
-		my_perror("socket");
-		return NULL;
-	}
-	int optval = 1;
-	socklen_t optlen = sizeof(optval);
-	setsockopt(httpd->sock, SOL_SOCKET, SO_REUSEADDR, (char*)&optval, optlen);
 
-	server.sin_family = PF_INET;
-	server.sin_addr.s_addr = INADDR_ANY; 
-	server.sin_port = htons(httpd->port);
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = httpd->family;
+	hints.ai_flags = AI_PASSIVE;
+	hints.ai_socktype = SOCK_STREAM;
 
-	if (bind(httpd->sock, (struct sockaddr *)&server, sizeof server) < 0) {
-		my_perror("bind");
+	error = getaddrinfo(httpd->hostname.c_str(), httpd->port.c_str(), &hints, &res);
+	if (error) {
+		my_perror(gai_strerror(error));
 		return NULL;
 	}
 
-	if (listen(httpd->sock, SOMAXCONN) < 0) {
-		my_perror("listen");
-		return NULL;
-	}
+	res0 = res;
 
-	char hostbuf[256] = {0};
-	gethostname(hostbuf, sizeof(hostbuf));
-	httpd->hostname = hostbuf;
-	struct hostent* hostent = gethostbyname(hostbuf);
-	if (hostent) {
-		sprintf(hostbuf, "%d.%d.%d.%d",
-			(unsigned char)*(hostent->h_addr_list[0]),
-			(unsigned char)*(hostent->h_addr_list[0]+1),
-			(unsigned char)*(hostent->h_addr_list[0]+2),
-			(unsigned char)*(hostent->h_addr_list[0]+3));
-		httpd->hostaddr = hostbuf;
-	}
+	for ( ; res; res = res->ai_next) {
+		int listen_sock;
 
-	if (VERBOSE(1)) printf("server started http://%s:%d/\n", hostbuf, httpd->port);
-	for(;;) {
-		struct sockaddr_in client;
-		int client_len = sizeof(client);
-		memset(&client, 0, sizeof(client));
-		msgsock = accept(httpd->sock, (struct sockaddr *)&client, (socklen_t *)&client_len);
-		if (VERBOSE(3)) printf("accepted socket %d\n", msgsock);
-		if (msgsock == -1) {
-			if (VERBOSE(1)) printf("failed to accept socket(%d)\n", errno);
-			closesocket(msgsock);
-			/*
-			break;
-			*/
+		sa = res->ai_addr;
+		salen = res->ai_addrlen;
+
+		if (getnameinfo(sa, salen,
+			ntop, sizeof(ntop), strport, sizeof(strport),
+			NI_NUMERICHOST | NI_NUMERICSERV) != 0) {
+			fprintf(stderr, "getnameinfo failed\n");
 			continue;
 		}
-		else {
-			std::string address = inet_ntoa(client.sin_addr);
+		listen_sock = socket(res->ai_family, res->ai_socktype,
+		    res->ai_protocol);
+		if (listen_sock < 0) {
+			fprintf(stderr, "socket: %.100s\n", strerror(errno));
+			continue;
+		}
 
-			server::HttpdInfo *pHttpdInfo = new server::HttpdInfo;
-			pHttpdInfo->msgsock = msgsock;
-			pHttpdInfo->httpd = httpd;
-			pHttpdInfo->address = address;
-			pHttpdInfo->port = client.sin_port;
+		if (setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR,
+			&on, sizeof(on)) == -1)
+			fprintf(stderr, "setsockopt SO_REUSEADDR: %s\n", strerror(errno));
 
-			int value;
+		if (bind(listen_sock, sa, salen) < 0) {
+			fprintf(stderr, "bind to port %s on %s failed: %.200s.\n",
+			    strport, ntop, strerror(errno));
+			close(listen_sock);
+			continue;
+		}
 
-			value = 1;
-			setsockopt(msgsock, IPPROTO_TCP, TCP_NODELAY, (char*)&value, sizeof(value));
-			value = 3;
-			setsockopt(msgsock, SOL_SOCKET, SO_SNDTIMEO, (char*)&value, sizeof(value));
-			value = 3;
-			setsockopt(msgsock, SOL_SOCKET, SO_RCVTIMEO, (char*)&value, sizeof(value));
+		if (listen(listen_sock, SOMAXCONN) < 0) {
+			fprintf(stderr, "listen: %.100s\n", strerror(errno));
+			exit(1);
+		}
+
+		httpd->socks.push_back(listen_sock);
+
+		char address[NI_MAXHOST], port[NI_MAXSERV];
+		if (getnameinfo((struct sockaddr*)sa, sa->sa_len, address, sizeof(address), port,
+			sizeof(port), numeric_host | NI_NUMERICSERV)) {
+			fprintf(stderr, "could not get hostname");
+			continue;
+		}
+		httpd->hostaddr.push_back(address);
+		// XXX: overwrite
+		httpd->port = port;
+		if (VERBOSE(1)) {
+			if (getnameinfo((struct sockaddr*)sa, sa->sa_len, address, sizeof(address), port,
+				sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV)) {
+				fprintf(stderr, "could not get hostname");
+				continue;
+			}
+			printf("server started. host: %s port: %s\n", address, port);
+		}
+	}
+
+	freeaddrinfo(res0);
+
+	struct pollfd *pfd = new pollfd[httpd->socks.size()];
+
+	for(;;) {
+		int fds, nfds;
+
+		for(fds = 0; fds < httpd->socks.size(); fds++) {
+			pfd[fds].fd = httpd->socks[fds];
+			pfd[fds].events = POLLIN;
+		}
+		nfds = poll(pfd, httpd->socks.size(), -1);
+		if (nfds == -1) {
+			for(fds = 0; fds < httpd->socks.size(); fds++) {
+				if (pfd[fds].revents & (POLLERR | POLLHUP | POLLNVAL))
+					fprintf(stderr, "poll: %s\n", strerror(errno));
+			}
+		}
+		for(int fds = 0; fds < httpd->socks.size(); fds++) {
+			int sock = httpd->socks[fds];
+
+			if (pfd[fds].revents != POLLIN)
+				continue;
+
+			struct sockaddr_storage client;
+			int client_len = sizeof(client);
+			memset(&client, 0, sizeof(client));
+			msgsock = accept(sock, (struct sockaddr *)&client, (socklen_t *)&client_len);
+			if (VERBOSE(3)) printf("accepted socket %d\n", msgsock);
+			if (msgsock == -1) {
+				if (errno != EINTR && errno != EWOULDBLOCK)
+					if (VERBOSE(1)) printf("accept %s", strerror(errno));
+				closesocket(msgsock);
+				/*
+				  break;
+				*/
+				continue;
+			}
+			else {
+				char address[NI_MAXHOST], port[NI_MAXSERV];
+
+				if (getnameinfo((struct sockaddr*)&client, client_len, address, sizeof(address), port,
+					sizeof(port), numeric_host | NI_NUMERICSERV))
+					fprintf(stderr, "could not get peername");
+
+				server::HttpdInfo *pHttpdInfo = new server::HttpdInfo;
+				pHttpdInfo->msgsock = msgsock;
+				pHttpdInfo->httpd = httpd;
+				pHttpdInfo->address = address;
+				pHttpdInfo->port = port;
+				pHttpdInfo->servno = fds;
+
+				int value;
+
+				value = 1;
+				setsockopt(msgsock, IPPROTO_TCP, TCP_NODELAY, (char*)&value, sizeof(value));
+				value = 3;
+				setsockopt(msgsock, SOL_SOCKET, SO_SNDTIMEO, (char*)&value, sizeof(value));
+				value = 3;
+				setsockopt(msgsock, SOL_SOCKET, SO_RCVTIMEO, (char*)&value, sizeof(value));
 
 #ifdef _WIN32
-			uintptr_t th;
-			while ((int)(th = _beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo)) == -1) {
-				Sleep(1);
+				uintptr_t th;
+				while ((int)(th = _beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo)) == -1) {
+					Sleep(1);
 			}
 #else
-			pthread_t pth;
-			while (pthread_create(&pth, NULL, response_thread, (void*)pHttpdInfo) != 0) {
-				usleep(100);
-			}
-			pthread_detach(pth);
+				pthread_t pth;
+				while (pthread_create(&pth, NULL, response_thread, (void*)pHttpdInfo) != 0) {
+					usleep(100);
+				}
+				pthread_detach(pth);
 #endif
+			}
 		}
 	}
 
 #ifdef _WIN32
 	_endthread();
 #endif
+
+	delete[] pfd;
 
 	return NULL;
 }
@@ -1650,7 +1734,9 @@ bool server::start() {
 }
 
 bool server::stop() {
-	closesocket(sock);
+	for(std::vector<int>::iterator sock = socks.begin(); sock != socks.end(); sock++){
+		closesocket(*sock);
+	}
 	wait();
 	return true;
 }
