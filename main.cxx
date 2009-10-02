@@ -1,8 +1,9 @@
 #include "httpd.h"
 #include <stdio.h>
 #include <string.h>
-
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 int  opterr = 1;
 int  optind = 1;
