@@ -1728,7 +1728,7 @@ request_end:
 	shutdown(msgsock, SD_BOTH);
 	closesocket(msgsock);
 	delete pHttpdInfo;
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(USE_PTHREAD)
 	_endthread();
 #endif
 
@@ -1811,18 +1811,18 @@ void* watch_thread(void* param)
 		httpd->socks.push_back(listen_sock);
 
 		char address[NI_MAXHOST], port[NI_MAXSERV];
-		if (getnameinfo((struct sockaddr*)sa, sizeof(struct sockaddr), address, sizeof(address), port,
+		if (getnameinfo((struct sockaddr*)sa, sizeof(struct sockaddr_storage), address, sizeof(address), port,
 			sizeof(port), numeric_host | NI_NUMERICSERV)) {
-			fprintf(stderr, "could not get hostname");
+			fprintf(stderr, "could not get hostname\n");
 			continue;
 		}
 		httpd->hostaddr.push_back(address);
 		// XXX: overwrite
 		httpd->port = port;
 		if (VERBOSE(1)) {
-			if (getnameinfo((struct sockaddr*)sa, sizeof(struct sockaddr), address, sizeof(address), port,
+			if (getnameinfo((struct sockaddr*)sa, sizeof(struct sockaddr_storage), address, sizeof(address), port,
 				sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV)) {
-				fprintf(stderr, "could not get hostname");
+				fprintf(stderr, "could not get hostname\n");
 				continue;
 			}
 			printf("server started. host: %s port: %s\n", address, port);
@@ -1845,9 +1845,9 @@ void* watch_thread(void* param)
 			FD_ZERO(&pfd[fds]);
 			FD_SET(httpd->socks[fds], &pfd[fds]);
 		}
-		nfds = select(httpd->socks.size(), pfd, NULL, NULL, 0);
+		nfds = select(httpd->socks.size(), pfd, NULL, NULL, NULL);
 		if (nfds == -1) {
-			fprintf(stderr, "select: %s\n", strerror(errno));
+			my_perror("select");
 		}
 #else
 		for(fds = 0; fds < httpd->socks.size(); fds++) {
@@ -1858,11 +1858,11 @@ void* watch_thread(void* param)
 		if (nfds == -1) {
 			for(fds = 0; fds < httpd->socks.size(); fds++) {
 				if (pfd[fds].revents & (POLLERR | POLLHUP | POLLNVAL))
-					fprintf(stderr, "poll: %s\n", strerror(errno));
+					my_perror("poll");
 			}
 		}
 #endif
-		for(int fds = 0; fds < (int)httpd->socks.size(); fds++) {
+		for(fds = 0; fds < (int)httpd->socks.size(); fds++) {
 			int sock = httpd->socks[fds];
 
 #ifdef _WIN32
@@ -1892,7 +1892,7 @@ void* watch_thread(void* param)
 
 				if (getnameinfo((struct sockaddr*)&client, client_len, address, sizeof(address), port,
 					sizeof(port), numeric_host | NI_NUMERICSERV))
-					fprintf(stderr, "could not get peername");
+					fprintf(stderr, "could not get peername\n");
 
 				server::HttpdInfo *pHttpdInfo = new server::HttpdInfo;
 				pHttpdInfo->msgsock = msgsock;
@@ -1910,7 +1910,7 @@ void* watch_thread(void* param)
 				value = 3;
 				setsockopt(msgsock, SOL_SOCKET, SO_RCVTIMEO, (char*)&value, sizeof(value));
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(USE_PTHREAD)
 				uintptr_t th;
 				while ((int)(th = _beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo)) == -1) {
 					Sleep(1);
@@ -1926,7 +1926,7 @@ void* watch_thread(void* param)
 		}
 	}
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(USE_PTHREAD)
 	_endthread();
 #endif
 
@@ -1941,7 +1941,7 @@ bool server::start() {
 #endif
 	if (thread)
 		return false;
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(USE_PTHREAD)
 	thread = (HANDLE)_beginthread((void (*)(void*))watch_thread, 0, (void*)this);
 #else
 	pthread_create(&thread, NULL, watch_thread, (void*)this);
@@ -1958,7 +1958,7 @@ bool server::stop() {
 }
 
 bool server::wait() {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(USE_PTHREAD)
 	WaitForSingleObject(thread, INFINITE);
 #else
 	pthread_join(thread, NULL);

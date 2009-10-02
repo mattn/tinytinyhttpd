@@ -31,13 +31,15 @@
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
-#include <sys/types.h>
 #ifdef _WIN32
+#include <winsock2.h>
 #include <ws2tcpip.h>
+#include <sys/types.h>
 #include <process.h>
 #include <direct.h>
 #include <io.h>
 #else
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
