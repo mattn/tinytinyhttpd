@@ -1,0 +1,12 @@
+.SUFFIXES: .cxx .o
+
+all : tthttpd.exe
+
+tthttpd.exe : main.o httpd.o utils.o
+	g++ -mthreads -o $@ main.o httpd.o utils.o -lws2_32
+
+.cxx.o :
+	g++ -Wall -mthreads -c $<
+
+clean :
+	rm *.o tthttpd
