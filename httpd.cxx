@@ -1789,13 +1789,19 @@ void* watch_thread(void* param)
 	struct addrinfo hints;
 	struct addrinfo *res, *res0;
 	int error;
+	const char *hostname;
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = httpd->family;
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_socktype = SOCK_STREAM;
 
-	error = getaddrinfo(httpd->hostname.c_str(), httpd->port.c_str(), &hints, &res);
+	if (httpd->hostname.size() == 0)
+		hostname = NULL;
+	else
+		hostname = httpd->hostname.c_str();
+
+	error = getaddrinfo(hostname, httpd->port.c_str(), &hints, &res);
 	if (error) {
 		my_perror(gai_strerror(error));
 		return NULL;

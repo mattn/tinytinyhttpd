@@ -126,7 +126,6 @@ public:
 	int verbose_mode;
 
 	void initialize() {
-		hostname = "localhost";
 		port = "www";
 		fs_charset = "utf-8";
 		thread = 0;
