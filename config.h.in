@@ -1,7 +1,13 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* Whether the AIX send_file() API is available */
+#undef AIX_SENDFILE_API
+
 /* Define to 1 if the `closedir' function returns void instead of `int'. */
 #undef CLOSEDIR_VOID
+
+/* Whether the FreeBSD sendfile() API is available */
+#undef FREEBSD_SENDFILE_API
 
 /* Define to 1 if you have the `alarm' function. */
 #undef HAVE_ALARM
@@ -36,6 +42,9 @@
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
+
+/* Define to 1 if you have the `sendfile' library (-lsendfile). */
+#undef HAVE_LIBSENDFILE
 
 /* Define to 1 if you have the <limits.h> header file. */
 #undef HAVE_LIMITS_H
@@ -77,6 +86,18 @@
 
 /* Define to 1 if you have the `select' function. */
 #undef HAVE_SELECT
+
+/* Whether sendfile() is available */
+#undef HAVE_SENDFILE
+
+/* Whether sendfile64() is available */
+#undef HAVE_SENDFILE64
+
+/* Whether sendfilev() is available */
+#undef HAVE_SENDFILEV
+
+/* Whether sendfilev64() is available */
+#undef HAVE_SENDFILEV64
 
 /* Define to 1 if you have the `socket' function. */
 #undef HAVE_SOCKET
@@ -153,6 +174,15 @@
 /* Define to 1 if the system has the type `_Bool'. */
 #undef HAVE__BOOL
 
+/* Whether the hpux sendfile() API is available */
+#undef HPUX_SENDFILE_API
+
+/* Whether (linux) sendfile() is broken */
+#undef LINUX_BROKEN_SENDFILE_API
+
+/* Whether linux sendfile() API is available */
+#undef LINUX_SENDFILE_API
+
 /* Define to 1 if `lstat' dereferences a symlink specified with a trailing
    slash. */
 #undef LSTAT_FOLLOWS_SLASHED_SYMLINK
@@ -188,6 +218,9 @@
 /* Define to the type of arg 5 for `select'. */
 #undef SELECT_TYPE_ARG5
 
+/* Whether the solaris sendfile() API is available */
+#undef SOLARIS_SENDFILE_API
+
 /* Define to 1 if the `S_IS*' macros in <sys/stat.h> do not work properly. */
 #undef STAT_MACROS_BROKEN
 
@@ -199,6 +232,9 @@
 
 /* Define to 1 if your <sys/time.h> declares `struct tm'. */
 #undef TM_IN_SYS_TIME
+
+/* Whether to include sendfile() support */
+#undef WITH_SENDFILE
 
 /* Define to empty if `const' does not conform to ANSI C. */
 #undef const
