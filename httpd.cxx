@@ -1016,8 +1016,6 @@ void* response_thread(void* param)
 	std::string if_modified_since;
 	unsigned long content_length;
 	std::string content_type;
-	char *post_data = NULL;
-	unsigned long post_size = 0;
 	RES_INFO* res_info = NULL;
 	char buf[BUFSIZ];
 	bool keep_alive;
@@ -1396,20 +1394,6 @@ request_top:
 					if (keep_alive)
 						res_head += "Connection: keep-alive\r\n";
 				} else {
-					if (content_length > 0) {
-						post_data = new char[content_length+1];
-						memset(post_data, 0, content_length+1);
-						if (recv(msgsock, post_data, content_length, 0) <= 0) {
-							res_type = "text/plain";
-							res_code = "500";
-							res_msg = "Bad Request";
-							res_body = "Bad Request\n";
-							goto request_done;
-						}
-						post_size = content_length;
-						content_length = 0;
-					}
-
 					res_close(res_info);
 					res_info = NULL;
 
@@ -1555,7 +1539,7 @@ request_top:
 						env += content_type;
 						envs.push_back(env);
 
-						sprintf(buf, "%d", (int)post_size);
+						sprintf(buf, "%d", (int)content_length);
 						env = "CONTENT_LENGTH=";
 						env += buf;
 						envs.push_back(env);
@@ -1574,17 +1558,26 @@ request_top:
 
 					res_info = res_popen(args, envs);
 
-					if (post_data) {
-						if (VERBOSE(999)) printf("%s\n", post_data);
-						res_write(res_info, post_data, post_size);
+					if (res_info && content_length > 0) {
+						while (content_length) {
+							memset(buf, 0, sizeof(buf));
+							unsigned long read = recv(msgsock, buf, sizeof(buf), 0);
+							if (read <= 0) break;
+							res_write(res_info, buf, read);
+							content_length -= read;
+						}
 #ifndef _WIN32
 						fflush((FILE*)res_info->write);
 #endif
-						delete[] post_data;
-						post_data = NULL;
-						post_size = 0;
+						res_closewriter(res_info);
+						if (content_length) {
+							res_type = "text/plain";
+							res_code = "500";
+							res_msg = "Bad Request";
+							res_body = "Bad Request\n";
+							goto request_done;
+						}
 					}
-					res_closewriter(res_info);
 				}
 			} else {
 				res_type = "text/plain";
@@ -1605,12 +1598,6 @@ request_top:
 		}
 	}
 request_done:
-
-	if (post_data) {
-		delete[] post_data;
-		post_data = NULL;
-		post_size = 0;
-	}
 
 	if (content_length > 0) {
 		while(content_length > 0) {
@@ -1696,12 +1683,12 @@ request_done:
 		send(msgsock, "\r\n", 2, 0);
 		unsigned long total = res_info->size;
 		int sent = 0;
-#if defined linux || defined __solaris__
-		sent = sendfile(msgsock, fileno(res_info->read), NULL, total);
-#elif defined __FreeBSD__
-		sendfile(msgsock, fileno(res_info->read), 0, &sent, NULL, 0);
-#elif defined _WIN32
 		if (total != (unsigned long)-1) {
+#if defined linux || defined __solaris__
+			sent = sendfile(msgsock, fileno(res_info->read), NULL, total);
+#elif defined __FreeBSD__
+			sendfile(msgsock, fileno(res_info->read), total, &sent, NULL, 0);
+#elif defined _WIN32
 			sent = TransmitFile(
 				msgsock,
 				res_info->read,
@@ -1710,8 +1697,8 @@ request_done:
 				NULL,
 				NULL,
 				0);
-		}
 #endif
+		}
 		if (!sent) {
 			while(total != 0) {
 				memset(buf, 0, sizeof(buf));
