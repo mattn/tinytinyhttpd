@@ -269,7 +269,7 @@ int getaddrinfo(const char *hostname, const char *servname,
 }
 #endif
 
-#if !defined(HAVE_POLL) && !defined(HAVE_POLL_H)
+#if !defined(HAVE_POLL) && !defined(HAVE_POLL_H) && !defined(_WIN32)
 
 /*
  * Copyright (c) 2004, 2005, 2007 Darren Tucker (dtucker at zip com au).
