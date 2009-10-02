@@ -1801,6 +1801,9 @@ void* watch_thread(void* param)
 	else
 		hostname = httpd->hostname.c_str();
 
+	if (hostname == NULL && hints.ai_family == AF_UNSPEC)
+                hints.ai_family = AF_INET;
+
 	error = getaddrinfo(hostname, httpd->port.c_str(), &hints, &res);
 	if (error) {
 		my_perror(gai_strerror(error));
