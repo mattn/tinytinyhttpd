@@ -1857,23 +1857,21 @@ void* watch_thread(void* param)
 
 		httpd->socks.push_back(listen_sock);
 
-		char address[NI_MAXHOST], port[NI_MAXSERV];
-		if (getnameinfo((struct sockaddr*)sa, sizeof(struct sockaddr_storage), address, sizeof(address), port,
-			sizeof(port), numeric_host | NI_NUMERICSERV)) {
-			fprintf(stderr, "could not get hostname\n");
-			continue;
-		}
-		httpd->hostaddr.push_back(address);
-		// XXX: overwrite
-		httpd->port = port;
-		if (VERBOSE(1)) {
+		if (!(numeric_host == 0)) {
+			char address[NI_MAXHOST], port[NI_MAXSERV];
 			if (getnameinfo((struct sockaddr*)sa, sizeof(struct sockaddr_storage), address, sizeof(address), port,
-				sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV)) {
+				sizeof(port), numeric_host | NI_NUMERICSERV)) {
 				fprintf(stderr, "could not get hostname\n");
 				continue;
 			}
-			printf("server started. host: %s port: %s\n", address, port);
 		}
+		if (VERBOSE(1)) {
+			printf("server started. host: %s port: %s\n", ntop, strport);
+		}
+
+		httpd->hostaddr.push_back(ntop);
+		// XXX: overwrite
+		httpd->port = strport;
 	}
 
 	freeaddrinfo(res0);
