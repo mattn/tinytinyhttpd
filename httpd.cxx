@@ -27,8 +27,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
-#include <poll.h>
 #ifndef _WIN32
+#include <poll.h>
 #include <signal.h>
 #include <dirent.h>
 #include <sys/types.h>
@@ -40,7 +40,9 @@
 
 extern char* crypt(const char *key, const char *setting);
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 namespace tthttpd {
 
@@ -51,11 +53,219 @@ typedef int socklen_t;
 #define strnicmp(x, y, z) strncasecmp(x, y, z)
 #endif
 
+#define EWOULDBLOCK WSAEWOULDBLOCK
+
 #ifndef S_ISREG
 #define S_ISREG(x) (x & S_IFREG)
 #endif
 
 #define VERBOSE(x) (httpd->verbose_mode >= x)
+
+#if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0501
+int inet_aton(const char *cp, struct in_addr *addr) {
+	register unsigned int val;
+	register int base, n;
+	register char c;
+	unsigned int parts[4];
+	register unsigned int *pp = parts;
+
+	c = *cp;
+	for (;;) {
+		if (!isdigit(c))
+			return (0);
+		val = 0; base = 10;
+		if (c == '0') {
+			c = *++cp;
+			if (c == 'x' || c == 'X')
+				base = 16, c = *++cp;
+			else
+				base = 8;
+		}
+		for (;;) {
+			if (isascii(c) && isdigit(c)) {
+				val = (val * base) + (c - '0');
+				c = *++cp;
+			} else if (base == 16 && isascii(c) && isxdigit(c)) {
+				val = (val << 4) |
+					(c + 10 - (islower(c) ? 'a' : 'A'));
+				c = *++cp;
+			} else
+				break;
+		}
+		if (c == '.') {
+			if (pp >= parts + 3)
+				return (0);
+			*pp++ = val;
+			c = *++cp;
+		} else
+			break;
+	}
+	if (c != '\0' && (!isascii(c) || !isspace(c)))
+		return (0);
+	n = pp - parts + 1;
+	switch (n) {
+
+	case 0:
+		return (0);		/* initial nondigit */
+
+	case 1:				/* a -- 32 bits */
+		break;
+
+	case 2:				/* a.b -- 8.24 bits */
+		if ((val > 0xffffff) || (parts[0] > 0xff))
+			return (0);
+		val |= parts[0] << 24;
+		break;
+
+	case 3:				/* a.b.c -- 8.8.16 bits */
+		if ((val > 0xffff) || (parts[0] > 0xff) || (parts[1] > 0xff))
+			return (0);
+		val |= (parts[0] << 24) | (parts[1] << 16);
+		break;
+
+	case 4:				/* a.b.c.d -- 8.8.8.8 bits */
+		if ((val > 0xff) || (parts[0] > 0xff) || (parts[1] > 0xff) || (parts[2] > 0xff))
+			return (0);
+		val |= (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8);
+		break;
+	}
+	if (addr)
+		addr->s_addr = htonl(val);
+	return (1);
+}
+
+const char* gai_strerror(int ecode) {
+	switch (ecode) {
+		case EAI_NODATA:
+			return "no address associated with hostname.";
+		case EAI_MEMORY:
+			return "memory allocation failure.";
+		default:
+			return "unknown error.";
+	}
+}    
+
+void freeaddrinfo(struct addrinfo *ai) {
+	struct addrinfo *next;
+
+	do {
+		next = ai->ai_next;
+		free(ai);
+	} while (NULL != (ai = next));
+}
+
+static struct addrinfo *malloc_ai(int port, u_long addr) {
+	struct addrinfo *ai;
+
+	ai = (struct addrinfo*) malloc(sizeof(struct addrinfo) + sizeof(struct sockaddr_in));
+	if (ai == NULL)
+		return(NULL);
+	
+	memset(ai, 0, sizeof(struct addrinfo) + sizeof(struct sockaddr_in));
+	
+	ai->ai_addr = (struct sockaddr *)(ai + 1);
+	ai->ai_addrlen = sizeof(struct sockaddr_in);
+	ai->ai_addr->sa_family = ai->ai_family = AF_INET;
+
+	((struct sockaddr_in *)(ai)->ai_addr)->sin_port = port;
+	((struct sockaddr_in *)(ai)->ai_addr)->sin_addr.s_addr = addr;
+	
+	return(ai);
+}
+
+int getnameinfo(const struct sockaddr *sa, size_t salen, char *host, 
+                size_t hostlen, char *serv, size_t servlen, int flags) {
+	struct sockaddr_in *sin = (struct sockaddr_in *)sa;
+	struct hostent *hp;
+	char tmpserv[16];
+
+	if (serv) {
+		snprintf(tmpserv, sizeof(tmpserv), "%d", ntohs(sin->sin_port));
+		if (strlen(tmpserv) > servlen)
+			return EAI_MEMORY;
+		else
+			strcpy(serv, tmpserv);
+	}
+
+	if (host) {
+		if (flags & NI_NUMERICHOST) {
+			if (strlen(inet_ntoa(sin->sin_addr)) > hostlen)
+				return EAI_MEMORY;
+
+			strcpy(host, inet_ntoa(sin->sin_addr));
+			return 0;
+		} else {
+			hp = gethostbyaddr((char *)&sin->sin_addr, 
+				sizeof(struct in_addr), AF_INET);
+			if (hp == NULL)
+				return EAI_NODATA;
+			
+			if (strlen(hp->h_name) > hostlen)
+				return EAI_MEMORY;
+
+			strcpy(host, hp->h_name);
+			return 0;
+		}
+	}
+	return 0;
+}
+
+int getaddrinfo(const char *hostname, const char *servname, 
+                const struct addrinfo *hints, struct addrinfo **res) {
+	struct addrinfo *cur, *prev = NULL;
+	struct hostent *hp;
+	struct in_addr in;
+	int i, port;
+
+	if (servname) {
+		struct servent *se;
+		if ((se = getservbyname(servname, "tcp")))
+			port = se->s_port;
+		else
+			port = htons(atoi(servname));
+	} else
+		port = 0;
+
+	if (hints && hints->ai_flags & AI_PASSIVE) {
+		if (NULL != (*res = malloc_ai(port, htonl(0x00000000))))
+			return 0;
+		else
+			return EAI_MEMORY;
+	}
+
+	if (!hostname) {
+		if (NULL != (*res = malloc_ai(port, htonl(0x7f000001))))
+			return 0;
+		else
+			return EAI_MEMORY;
+	}
+	
+	if (inet_aton(hostname, &in)) {
+		if (NULL != (*res = malloc_ai(port, in.s_addr)))
+			return 0;
+		else
+			return EAI_MEMORY;
+	}
+	
+	hp = gethostbyname(hostname);
+	if (hp && hp->h_name && hp->h_name[0] && hp->h_addr_list[0]) {
+		for (i = 0; hp->h_addr_list[i]; i++) {
+			cur = malloc_ai(port, ((struct in_addr *)hp->h_addr_list[i])->s_addr);
+			if (cur == NULL) {
+				if (*res)
+					freeaddrinfo(*res);
+				return EAI_MEMORY;
+			}
+			if (prev) prev->ai_next = cur;
+			else *res = cur;
+			prev = cur;
+		}
+		return 0;
+	}
+	
+	return EAI_NODATA;
+}
+#endif
 
 typedef struct {
 #ifdef _WIN32
@@ -227,7 +437,6 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 static bool res_iscgi(std::string& file, std::string& path_info, std::string& script_name, server::MimeTypes& mime_types, std::string& type) {
 	std::vector<std::string> split_path = split_string(file, "/");
 	std::string path = "";
-	server::MimeTypes::iterator it_mime;
 
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
 		if (it->empty()) continue;
@@ -236,27 +445,19 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
     	struct stat	st;
 		if (stat((char *)path.c_str(), &st))
 			continue;
+		server::MimeTypes::iterator it_mime;
 		for(it_mime = mime_types.begin(); it_mime != mime_types.end(); it_mime++) {
 			if (it_mime->second[0] != '@') continue;
-			if (it_mime->first[0] == '@') {
-				if (!strncmp(path.c_str()+path.size()-it_mime->first.size()+1, it_mime->first.c_str()+1, it_mime->first.size()-1)) {
-					type = it_mime->second;
-					path_info = file.c_str() + path.size();
-					script_name.resize(script_name.size() - path_info.size());
-					return true;
-				}
-			} else {
-				std::string match = ".";
-				match += it_mime->first;
-				if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
-					type = it_mime->second;
-					path_info = file.c_str() + path.size();
-					script_name.resize(script_name.size() - path_info.size());
-					file = path;
-					if (script_name == "/")
-						script_name += *it;
-					return true;
-				}
+			std::string match = ".";
+			match += it_mime->first;
+			if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+				type = it_mime->second;
+				path_info = file.c_str() + path.size();
+				script_name.resize(script_name.size() - path_info.size());
+				file = path;
+				if (script_name == "/")
+					script_name += *it;
+				return true;
 			}
 		}
 	}
@@ -898,13 +1099,13 @@ request_top:
 			res_code = "403";
 			res_msg = "Forbidden";
 			res_body = "Forbidden";
-			throw res_code;
+			goto request_done;
 		} else
 		if (vparam.size() < 2 || vparam[1][0] != '/') {
 			res_code = "500";
 			res_msg = "Bad Request";
 			res_body = "Bad Request\n";
-			throw res_code;
+			goto request_done;
 		} else {
 			if (vparam.size() == 2)
 				res_proto = "HTTP/1.0";
@@ -954,14 +1155,14 @@ request_top:
 					res_head = "Location: ";
 					res_head += path;
 					res_head += "\n";
-					throw res_code;
+					goto request_done;
 				}
 				/*
 				if (strncmp(root.c_str(), path.c_str(), root.size())) {
 					res_code = "500";
 					res_msg = "Bad Request";
 					res_body = "Bad Request\n";
-					throw res_code;
+					goto request_done;
 				}
 				*/
 
@@ -1005,7 +1206,7 @@ request_top:
 						}
 						res_head += "\r\n";
 						res_body = "Authorization Required";
-						throw res_code;
+						goto request_done;
 					}
 				}
 				if (!vauth.empty()) {
@@ -1026,7 +1227,7 @@ request_top:
 								}
 								res_head += "\r\n";
 								res_body = "Authorization Required";
-								throw res_code;
+								goto request_done;
 							}
 						}
 					}
@@ -1126,7 +1327,7 @@ request_top:
 						}
 						res_body += "</table></pre ><hr /></body></html>";
 					}
-					throw res_code;
+					goto request_done;
 				}
 
 				res_info = res_fopen(path);
@@ -1135,7 +1336,7 @@ request_top:
 					res_code = "404";
 					res_msg = "Not Found";
 					res_body = "Not Found\n";
-					throw res_code;
+					goto request_done;
 				}
 
 				res_code = "200";
@@ -1150,7 +1351,7 @@ request_top:
 						res_code = "304";
 						res_msg = "Not Modified";
 						res_body = "";
-						throw res_code;
+						goto request_done;
 					}
 					res_head += "Content-Type: ";
 					res_head += type;
@@ -1175,7 +1376,7 @@ request_top:
 							res_code = "500";
 							res_msg = "Bad Request";
 							res_body = "Bad Request\n";
-							throw res_code;
+							goto request_done;
 						}
 						post_size = content_length;
 						content_length = 0;
@@ -1198,7 +1399,7 @@ request_top:
 
 					std::string env;
 
-					sprintf(buf, "HTTP_HOST=%s:%d", httpd->hostname.c_str(), httpd->port.c_str());
+					sprintf(buf, "HTTP_HOST=%s:%s", httpd->hostname.c_str(), httpd->port.c_str());
 					env = buf;
 					envs.push_back(env);
 
@@ -1213,7 +1414,7 @@ request_top:
 					env += httpd->hostname;
 					envs.push_back(env);
 
-					sprintf(buf, "SERVER_PORT=%d", httpd->port.c_str());
+					sprintf(buf, "SERVER_PORT=%s", httpd->port.c_str());
 					env = buf;
 					envs.push_back(env);
 
@@ -1221,7 +1422,7 @@ request_top:
 					env += address;
 					envs.push_back(env);
 
-					sprintf(buf, "REMOTE_PORT=%d", port);
+					sprintf(buf, "REMOTE_PORT=%s", port.c_str());
 					env = buf;
 					envs.push_back(env);
 
@@ -1362,7 +1563,7 @@ request_top:
 				res_code = "500";
 				res_msg = "Bad Request";
 				res_body = "Bad Request\n";
-				throw res_code;
+				goto request_done;
 			}
 		}
 	}
@@ -1375,6 +1576,7 @@ request_top:
 			res_body = "Internal Server Error\n";
 		}
 	}
+request_done:
 
 	if (post_data) {
 		delete[] post_data;
@@ -1450,14 +1652,6 @@ request_top:
 	}
 
 	if (res_code.size()) {
-		/*
-		if (res_proto == "HTTP/1.1") {
-			send(msgsock, "Status: ", 8, 0);
-			send(msgsock, res_code.c_str(), (int)res_code.size(), 0);
-			send(msgsock, "\r\n", 2, 0);
-		}
-		*/
-
 		send(msgsock, res_proto.c_str(), (int)res_proto.size(), 0);
 		send(msgsock, " ", 1, 0);
 		send(msgsock, res_code.c_str(), (int)res_code.size(), 0);
@@ -1546,13 +1740,6 @@ void* watch_thread(void* param)
 	server *httpd = (server*)param;
 	int msgsock;
 
-	struct sockaddr *sa;
-	struct addrinfo hints;
-	struct addrinfo *res, *res0;
-	int error;
-	char ntop[NI_MAXHOST], strport[NI_MAXSERV];
-	u_int8_t salen;
-	int on;
 	int numeric_host = 0;
 
 	// privsep?
@@ -1563,6 +1750,11 @@ void* watch_thread(void* param)
 #ifdef SIGPIPE
 	signal(SIGPIPE, SIG_IGN);
 #endif
+
+	struct sockaddr *sa;
+	struct addrinfo hints;
+	struct addrinfo *res, *res0;
+	int error;
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = httpd->family;
@@ -1579,6 +1771,9 @@ void* watch_thread(void* param)
 
 	for ( ; res; res = res->ai_next) {
 		int listen_sock;
+		char on;
+		unsigned int salen;
+		char ntop[NI_MAXHOST], strport[NI_MAXSERV];
 
 		sa = res->ai_addr;
 		salen = res->ai_addrlen;
@@ -1615,7 +1810,7 @@ void* watch_thread(void* param)
 		httpd->socks.push_back(listen_sock);
 
 		char address[NI_MAXHOST], port[NI_MAXSERV];
-		if (getnameinfo((struct sockaddr*)sa, sa->sa_len, address, sizeof(address), port,
+		if (getnameinfo((struct sockaddr*)sa, sizeof(struct sockaddr), address, sizeof(address), port,
 			sizeof(port), numeric_host | NI_NUMERICSERV)) {
 			fprintf(stderr, "could not get hostname");
 			continue;
@@ -1624,7 +1819,7 @@ void* watch_thread(void* param)
 		// XXX: overwrite
 		httpd->port = port;
 		if (VERBOSE(1)) {
-			if (getnameinfo((struct sockaddr*)sa, sa->sa_len, address, sizeof(address), port,
+			if (getnameinfo((struct sockaddr*)sa, sizeof(struct sockaddr), address, sizeof(address), port,
 				sizeof(port), NI_NUMERICHOST | NI_NUMERICSERV)) {
 				fprintf(stderr, "could not get hostname");
 				continue;
@@ -1635,11 +1830,25 @@ void* watch_thread(void* param)
 
 	freeaddrinfo(res0);
 
+#ifdef _WIN32
+	struct fd_set *pfd = new fd_set[httpd->socks.size()];
+#else
 	struct pollfd *pfd = new pollfd[httpd->socks.size()];
+#endif
 
 	for(;;) {
 		int fds, nfds;
 
+#ifdef _WIN32
+		for(fds = 0; fds < (int)httpd->socks.size(); fds++) {
+			FD_ZERO(&pfd[fds]);
+			FD_SET(httpd->socks[fds], &pfd[fds]);
+		}
+		nfds = select(httpd->socks.size(), pfd, NULL, NULL, 0);
+		if (nfds == -1) {
+			fprintf(stderr, "select: %s\n", strerror(errno));
+		}
+#else
 		for(fds = 0; fds < httpd->socks.size(); fds++) {
 			pfd[fds].fd = httpd->socks[fds];
 			pfd[fds].events = POLLIN;
@@ -1651,11 +1860,17 @@ void* watch_thread(void* param)
 					fprintf(stderr, "poll: %s\n", strerror(errno));
 			}
 		}
-		for(int fds = 0; fds < httpd->socks.size(); fds++) {
+#endif
+		for(int fds = 0; fds < (int)httpd->socks.size(); fds++) {
 			int sock = httpd->socks[fds];
 
+#ifdef _WIN32
+			if (!FD_ISSET(sock, &pfd[fds]))
+				continue;
+#else
 			if (pfd[fds].revents != POLLIN)
 				continue;
+#endif
 
 			struct sockaddr_storage client;
 			int client_len = sizeof(client);
@@ -1698,7 +1913,7 @@ void* watch_thread(void* param)
 				uintptr_t th;
 				while ((int)(th = _beginthread((void (*)(void*))response_thread, 0, (void*)pHttpdInfo)) == -1) {
 					Sleep(1);
-			}
+				}
 #else
 				pthread_t pth;
 				while (pthread_create(&pth, NULL, response_thread, (void*)pHttpdInfo) != 0) {
@@ -1734,7 +1949,7 @@ bool server::start() {
 }
 
 bool server::stop() {
-	for(std::vector<int>::iterator sock = socks.begin(); sock != socks.end(); sock++){
+	for(std::vector<unsigned int>::iterator sock = socks.begin(); sock != socks.end(); sock++){
 		closesocket(*sock);
 	}
 	wait();
