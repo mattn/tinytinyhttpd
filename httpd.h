@@ -33,7 +33,7 @@
 
 #include <sys/types.h>
 #ifdef _WIN32
-#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <process.h>
 #include <direct.h>
 #include <io.h>
@@ -102,7 +102,7 @@ private:
 #endif
 
 public:
-	std::vector<int> socks;
+	std::vector<unsigned int> socks;
 	int family;
 	std::string hostname;
 	std::vector<std::string> hostaddr;
