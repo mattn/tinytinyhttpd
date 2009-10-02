@@ -35,6 +35,8 @@
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#else
+#include <mswsock.h>
 #endif
 
 extern char* crypt(const char *key, const char *setting);
@@ -55,6 +57,19 @@ typedef int socklen_t;
 #if !defined(EWOULDBLOCK) && defined(WSAEWOULDBLOCK)
 #define EWOULDBLOCK WSAEWOULDBLOCK
 #endif
+
+#ifndef NBBY
+#define NBBY    8          /* number of bits in a byte */
+#endif
+#ifndef NFDBITS
+#define NFDBITS (sizeof(fd_mask) * NBBY)        /* bits per mask */
+#endif
+
+#ifndef howmany
+#define howmany(x,y)    (((x)+((y)-1))/(y))
+#endif
+
+typedef long fd_mask;
 
 #ifndef S_ISREG
 #define S_ISREG(x) (x & S_IFREG)
@@ -1344,7 +1359,8 @@ request_top:
 				res_msg = "OK";
 				if (type[0] != '@') {
 					std::string file_time = res_ftime(path);
-					sprintf(buf, "%d", (int)res_fsize(res_info));
+					res_info->size = res_fsize(res_info);
+					sprintf(buf, "%d", (int)res_info->size);
 					if (if_modified_since.size() && if_modified_since == file_time) {
 						res_close(res_info);
 						res_info = NULL;
@@ -1668,12 +1684,27 @@ request_done:
 	if (res_info) {
 		send(msgsock, "\r\n", 2, 0);
 		unsigned long total = res_info->size;
-		while(total != 0) {
-			memset(buf, 0, sizeof(buf));
-			unsigned long read = res_read(res_info, buf, sizeof(buf));
-			if (read == 0) break;
-			send(msgsock, buf, read > total ? total : read, 0);
-			total -= read;
+		int sent = 0;
+#ifdef _WIN32
+		if (total != (unsigned long)-1) {
+			sent = TransmitFile(
+				msgsock,
+				res_info->read,
+				total,
+				0,
+				NULL,
+				NULL,
+				0);
+		}
+#endif
+		if (!sent) {
+			while(total != 0) {
+				memset(buf, 0, sizeof(buf));
+				unsigned long read = res_read(res_info, buf, sizeof(buf));
+				if (read == 0) break;
+				send(msgsock, buf, read > total ? total : read, 0);
+				total -= read;
+			}
 		}
 		res_close(res_info);
 		res_info = NULL;
@@ -1828,39 +1859,30 @@ void* watch_thread(void* param)
 			}
 			printf("server started. host: %s port: %s\n", address, port);
 		}
-
-		int value = 1;
-		setsockopt(listen_sock, IPPROTO_TCP, TCP_NODELAY, (char*)&value, sizeof(value));
 	}
 
 	freeaddrinfo(res0);
 
-	int nserver = httpd->socks.size();
-
-	struct fd_set *fdset = new fd_set[nserver];
-
-	int maxfd = 0;
+	int nserver = (int)httpd->socks.size();
+	unsigned int maxfd = 0;
 	for(int fds = 0; fds < nserver; fds++) {
-                if (httpd->socks[fds] > maxfd)
-                        maxfd = httpd->socks[fds];
-        }
-
-	int fds, nfds;
+		if (httpd->socks[fds] > maxfd)
+			maxfd = httpd->socks[fds];
+	}
+	int fdsetsz = howmany(maxfd + 1, NFDBITS) * sizeof(fd_mask);
+	struct fd_set *fdset = (fd_set *)malloc(fdsetsz);
 
 	for(;;) {
 		int fds, nfds;
 
-		if (fdset != NULL)
-                        free(fdset);
-                int fdsetsz = howmany(maxfd + 1, NFDBITS) * sizeof(fd_mask);
-                fdset = (fd_set *)malloc(fdsetsz);
-                memset(fdset, 0, fdsetsz);
+		memset(fdset, 0, fdsetsz);
 
 		for(fds = 0; fds < nserver; fds++)
 			FD_SET(httpd->socks[fds], fdset);
 		nfds = select(maxfd + 1, fdset, NULL, NULL, NULL);
 		if (nfds == -1) {
 			my_perror("select");
+			continue;
 		}
 		for(fds = 0; fds < nserver; fds++) {
 			int sock = httpd->socks[fds];
@@ -1881,15 +1903,14 @@ void* watch_thread(void* param)
 				  break;
 				*/
 				continue;
-			}
-			else {
+			} else {
 				char address[NI_MAXHOST], port[NI_MAXSERV];
 
 				if (httpd->family == AF_INET)
 					strcpy(address, inet_ntoa(((struct sockaddr_in *)&client)->sin_addr));
 				else {
 					if (getnameinfo((struct sockaddr*)&client, client_len, address, sizeof(address), port,
-						sizeof(port), numeric_host | NI_NUMERICHOST | NI_NUMERICSERV))
+							sizeof(port), numeric_host | NI_NUMERICSERV))
 						fprintf(stderr, "could not get peername\n");
 				}
 
