@@ -128,6 +128,11 @@ int main(int argc, char* argv[]) {
 		case 'c': cfg = optarg; break;
 		case 'd': root = optarg; break;
 		case 'v': verbose++; break;
+#ifdef PACKAGE_VERSION
+		case 'V':
+			printf("%s\n", PACKAGE_VERSION);
+			break;
+#endif
 		case 'x': spawn_exec = true; break;
 		case 'h': argc = 0; break;
 		case '?': break;
@@ -137,15 +142,28 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (argc == 0) {
-		std::cerr << "usage: " << argv[0]
-			<< " [-4|-6]"
-			<< " [-p server-port]"
-			<< " [-c config-file]"
-			<< " [-d root-dir]"
-			<< " [-v]"
-			<< " [-x]"
-			<< " [-h]"
-			<< std::endl;
+		const char* lines[] = {
+#ifdef PACKAGE_VERSION
+			"tthttpd (tinytinyhttpd) " PACKAGE_VERSION<
+#else
+			"tthttpd (tinytinyhttpd)",
+#endif
+			"  usage: tthttpd [-4|-6] [-p server-port] [-c config-file] [-d root-dir] [-v] [-x] [-h]",
+			"  -4 : ipv4 only",
+			"  -6 : ipv6 only",
+			"  -p : server port (name or numeric)",
+			"  -c : config file",
+			"  -d : root directory",
+			"  -v : verbose mode (-vvv mean level 3)",
+			"  -x : spawn file as cgi if possible",
+			"  -h : show this usage",
+#ifdef PACKAGE_VERSION
+			"  -V : show version",
+#endif
+			NULL
+		};
+		for (const char** ptr = lines; *ptr; ptr++)
+			std::cerr << *ptr << std::endl;
 		exit(1);
 	}
 

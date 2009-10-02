@@ -1828,6 +1828,9 @@ void* watch_thread(void* param)
 			}
 			printf("server started. host: %s port: %s\n", address, port);
 		}
+
+		int value = 1;
+		setsockopt(listen_sock, IPPROTO_TCP, TCP_NODELAY, (char*)&value, sizeof(value));
 	}
 
 	freeaddrinfo(res0);
@@ -1840,6 +1843,8 @@ void* watch_thread(void* param)
                         maxfd = httpd->socks[fds];
         }
 
+	int fds, nfds;
+	int nserver = httpd->socks.size();
 	for(;;) {
 		int fds, nfds;
 
@@ -1878,9 +1883,13 @@ void* watch_thread(void* param)
 			else {
 				char address[NI_MAXHOST], port[NI_MAXSERV];
 
-				if (getnameinfo((struct sockaddr*)&client, client_len, address, sizeof(address), port,
-					sizeof(port), numeric_host | NI_NUMERICSERV))
-					fprintf(stderr, "could not get peername\n");
+				if (httpd->family == AF_INET)
+					strcpy(address, inet_ntoa(((struct sockaddr_in *)&client)->sin_addr));
+				else {
+					if (getnameinfo((struct sockaddr*)&client, client_len, address, sizeof(address), port,
+						sizeof(port), numeric_host | NI_NUMERICHOST | NI_NUMERICSERV))
+						fprintf(stderr, "could not get peername\n");
+				}
 
 				server::HttpdInfo *pHttpdInfo = new server::HttpdInfo;
 				pHttpdInfo->msgsock = msgsock;
