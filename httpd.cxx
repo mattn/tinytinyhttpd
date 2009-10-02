@@ -53,7 +53,9 @@ typedef int socklen_t;
 #define strnicmp(x, y, z) strncasecmp(x, y, z)
 #endif
 
+#if !defined(EWOULDBLOCK) && defined(WSAEWOULDBLOCK)
 #define EWOULDBLOCK WSAEWOULDBLOCK
+#endif
 
 #ifndef S_ISREG
 #define S_ISREG(x) (x & S_IFREG)
@@ -61,7 +63,7 @@ typedef int socklen_t;
 
 #define VERBOSE(x) (httpd->verbose_mode >= x)
 
-#if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0501
+#if !defined(HAVE_GETADDRINFO) && defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0501
 int inet_aton(const char *cp, struct in_addr *addr) {
 	register unsigned int val;
 	register int base, n;

@@ -17,7 +17,7 @@ AC_PROG_CC
 AC_HEADER_DIRENT
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h netdb.h netinet/in.h string.h sys/socket.h unistd.h])
+AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h netdb.h poll.h netinet/in.h string.h sys/socket.h unistd.h])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STAT
@@ -37,7 +37,7 @@ AC_FUNC_REALLOC
 AC_FUNC_SELECT_ARGTYPES
 AC_TYPE_SIGNAL
 AC_FUNC_STAT
-AC_CHECK_FUNCS([dup2 gethostbyname gethostname inet_ntoa mblen memset realpath select socket strchr strpbrk wcwidth])
+AC_CHECK_FUNCS([dup2 gethostbyname gethostname getaddrinfo inet_ntoa mblen memset realpath select socket strchr strpbrk wcwidth poll])
 
 # pthread
 dnl FIXME: do we need -D_REENTRANT here?
