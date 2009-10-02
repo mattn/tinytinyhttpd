@@ -53,7 +53,9 @@ typedef int socklen_t;
 #define strnicmp(x, y, z) strncasecmp(x, y, z)
 #endif
 
+#if !defined(EWOULDBLOCK) && defined(WSAEWOULDBLOCK)
 #define EWOULDBLOCK WSAEWOULDBLOCK
+#endif
 
 #ifndef S_ISREG
 #define S_ISREG(x) (x & S_IFREG)
