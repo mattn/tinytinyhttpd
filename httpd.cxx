@@ -42,9 +42,9 @@
 #define __solaris__
 #endif
 
-#if defined linux || defined solaris
+#if defined LINUX_SENDFILE_API
 #include <sys/sendfile.h>
-#elif defined (__FreeBSD__) || defined (__APPLE__)
+#elif FREEBSD_SENDFILE_API
 #include <sys/uio.h>
 #elif defined _WIN32
 #include <mswsock.h>
