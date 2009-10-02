@@ -35,7 +35,18 @@
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#else
+#include <unistd.h>
+#endif
+
+#if defined (__SVR4) && defined (__sun)
+#define __solaris__
+#endif
+
+#if defined linux || defined solaris
+#include <sys/sendfile.h>
+#elif defined (__FreeBSD__) || defined (__APPLE__)
+#include <sys/uio.h>
+#elif defined _WIN32
 #include <mswsock.h>
 #endif
 
@@ -1685,7 +1696,11 @@ request_done:
 		send(msgsock, "\r\n", 2, 0);
 		unsigned long total = res_info->size;
 		int sent = 0;
-#ifdef _WIN32
+#if defined linux || defined __solaris__
+		sent = sendfile(msgsock, res_info->read, NULL, total);
+#elif defined __FreeBSD__
+		sendfile(msgsock, res_info->read, 0, &sent, NULL, 0);
+#elif defined _WIN32
 		if (total != (unsigned long)-1) {
 			sent = TransmitFile(
 				msgsock,
