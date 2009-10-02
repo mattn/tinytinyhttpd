@@ -1827,6 +1827,9 @@ void* watch_thread(void* param)
 			}
 			printf("server started. host: %s port: %s\n", address, port);
 		}
+
+		int value = 1;
+		setsockopt(listen_sock, IPPROTO_TCP, TCP_NODELAY, (char*)&value, sizeof(value));
 	}
 
 	freeaddrinfo(res0);
@@ -1837,32 +1840,32 @@ void* watch_thread(void* param)
 	struct pollfd *pfd = new pollfd[httpd->socks.size()];
 #endif
 
+	int fds, nfds;
+	int nserver = httpd->socks.size();
 	for(;;) {
-		int fds, nfds;
-
 #ifdef _WIN32
-		for(fds = 0; fds < (int)httpd->socks.size(); fds++) {
+		for(fds = 0; fds < nserver; fds++) {
 			FD_ZERO(&pfd[fds]);
 			FD_SET(httpd->socks[fds], &pfd[fds]);
 		}
-		nfds = select(httpd->socks.size(), pfd, NULL, NULL, NULL);
+		nfds = select(nserver, pfd, NULL, NULL, NULL);
 		if (nfds == -1) {
 			my_perror("select");
 		}
 #else
-		for(fds = 0; fds < httpd->socks.size(); fds++) {
+		for(fds = 0; fds < nserver; fds++) {
 			pfd[fds].fd = httpd->socks[fds];
 			pfd[fds].events = POLLIN;
 		}
-		nfds = poll(pfd, httpd->socks.size(), -1);
+		nfds = poll(pfd, nserver, -1);
 		if (nfds == -1) {
-			for(fds = 0; fds < httpd->socks.size(); fds++) {
+			for(fds = 0; fds < nserver; fds++) {
 				if (pfd[fds].revents & (POLLERR | POLLHUP | POLLNVAL))
 					my_perror("poll");
 			}
 		}
 #endif
-		for(fds = 0; fds < (int)httpd->socks.size(); fds++) {
+		for(fds = 0; fds < nserver; fds++) {
 			int sock = httpd->socks[fds];
 
 #ifdef _WIN32
@@ -1890,9 +1893,13 @@ void* watch_thread(void* param)
 			else {
 				char address[NI_MAXHOST], port[NI_MAXSERV];
 
-				if (getnameinfo((struct sockaddr*)&client, client_len, address, sizeof(address), port,
-					sizeof(port), numeric_host | NI_NUMERICSERV))
-					fprintf(stderr, "could not get peername\n");
+				if (httpd->family == AF_INET)
+					strcpy(address, inet_ntoa(((struct sockaddr_in *)&client)->sin_addr));
+				else {
+					if (getnameinfo((struct sockaddr*)&client, client_len, address, sizeof(address), port,
+						sizeof(port), numeric_host | NI_NUMERICHOST | NI_NUMERICSERV))
+						fprintf(stderr, "could not get peername\n");
+				}
 
 				server::HttpdInfo *pHttpdInfo = new server::HttpdInfo;
 				pHttpdInfo->msgsock = msgsock;
