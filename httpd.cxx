@@ -1820,9 +1820,9 @@ void* watch_thread(void* param)
 	for ( ; res; res = res->ai_next) {
 		int listen_sock;
 #ifdef _WIN32
-		char on;
+		char on = 1;
 #else
-		int on;
+		int on = 1;
 #endif
 		unsigned int salen;
 		char ntop[NI_MAXHOST], strport[NI_MAXSERV];
