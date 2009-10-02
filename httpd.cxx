@@ -1696,9 +1696,9 @@ request_done:
 		send(msgsock, "\r\n", 2, 0);
 		unsigned long total = res_info->size;
 		int sent = 0;
-#if defined linux || defined __solaris__
+#if defined LINUX_SENDFILE_API
 		sent = sendfile(msgsock, res_info->read, NULL, total);
-#elif defined __FreeBSD__
+#elif defined FREEBSD_SENDFILE_API
 		sendfile(msgsock, res_info->read, 0, &sent, NULL, 0);
 #elif defined _WIN32
 		if (total != (unsigned long)-1) {
