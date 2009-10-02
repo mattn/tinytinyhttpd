@@ -1845,8 +1845,9 @@ void* watch_thread(void* param)
 
 	freeaddrinfo(res0);
 
+	int nserver = (int)httpd->socks.size();
 	unsigned int maxfd = 0;
-	for(int fds = 0; fds < (int)httpd->socks.size(); fds++) {
+	for(int fds = 0; fds < nserver; fds++) {
 		if (httpd->socks[fds] > maxfd)
 			maxfd = httpd->socks[fds];
 	}
@@ -1857,14 +1858,14 @@ void* watch_thread(void* param)
 		int fds, nfds;
 
 		memset(fdset, 0, fdsetsz);
-		for(fds = 0; fds < (int)httpd->socks.size(); fds++)
+		for(fds = 0; fds < nserver; fds++)
 			FD_SET(httpd->socks[fds], fdset);
 		nfds = select(maxfd + 1, fdset, NULL, NULL, NULL);
 		if (nfds == -1) {
 			my_perror("select");
 			continue;
 		}
-		for(fds = 0; fds < (int)httpd->socks.size(); fds++) {
+		for(fds = 0; fds < nserver; fds++) {
 			int sock = httpd->socks[fds];
 
 			if (!FD_ISSET(sock, &fdset[fds]))

@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
 	if (argc == 0) {
 		const char* lines[] = {
 #ifdef PACKAGE_VERSION
-			"tthttpd (tinytinyhttpd) " PACKAGE_VERSION<
+			"tthttpd (tinytinyhttpd) " PACKAGE_VERSION,
 #else
 			"tthttpd (tinytinyhttpd)",
 #endif
