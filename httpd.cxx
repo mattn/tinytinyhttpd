@@ -169,7 +169,7 @@ const char* gai_strerror(int ecode) {
 		default:
 			return "unknown error.";
 	}
-}    
+}
 
 void freeaddrinfo(struct addrinfo *ai) {
 	struct addrinfo *next;
@@ -186,16 +186,16 @@ static struct addrinfo *malloc_ai(int port, u_long addr) {
 	ai = (struct addrinfo*) malloc(sizeof(struct addrinfo) + sizeof(struct sockaddr_in));
 	if (ai == NULL)
 		return(NULL);
-	
+
 	memset(ai, 0, sizeof(struct addrinfo) + sizeof(struct sockaddr_in));
-	
+
 	ai->ai_addr = (struct sockaddr *)(ai + 1);
 	ai->ai_addrlen = sizeof(struct sockaddr_in);
 	ai->ai_addr->sa_family = ai->ai_family = AF_INET;
 
 	((struct sockaddr_in *)(ai)->ai_addr)->sin_port = port;
 	((struct sockaddr_in *)(ai)->ai_addr)->sin_addr.s_addr = addr;
-	
+
 	return(ai);
 }
 
@@ -221,11 +221,11 @@ int getnameinfo(const struct sockaddr *sa, size_t salen, char *host,
 			strcpy(host, inet_ntoa(sin->sin_addr));
 			return 0;
 		} else {
-			hp = gethostbyaddr((char *)&sin->sin_addr, 
+			hp = gethostbyaddr((char *)&sin->sin_addr,
 				sizeof(struct in_addr), AF_INET);
 			if (hp == NULL)
 				return EAI_NODATA;
-			
+
 			if (strlen(hp->h_name) > hostlen)
 				return EAI_MEMORY;
 
@@ -236,7 +236,7 @@ int getnameinfo(const struct sockaddr *sa, size_t salen, char *host,
 	return 0;
 }
 
-int getaddrinfo(const char *hostname, const char *servname, 
+int getaddrinfo(const char *hostname, const char *servname,
                 const struct addrinfo *hints, struct addrinfo **res) {
 	struct addrinfo *cur, *prev = NULL;
 	struct hostent *hp;
@@ -265,14 +265,14 @@ int getaddrinfo(const char *hostname, const char *servname,
 		else
 			return EAI_MEMORY;
 	}
-	
+
 	if (inet_aton(hostname, &in)) {
 		if (NULL != (*res = malloc_ai(port, in.s_addr)))
 			return 0;
 		else
 			return EAI_MEMORY;
 	}
-	
+
 	hp = gethostbyname(hostname);
 	if (hp && hp->h_name && hp->h_name[0] && hp->h_addr_list[0]) {
 		for (i = 0; hp->h_addr_list[i]; i++) {
@@ -288,7 +288,7 @@ int getaddrinfo(const char *hostname, const char *servname,
 		}
 		return 0;
 	}
-	
+
 	return EAI_NODATA;
 }
 #endif
@@ -605,9 +605,9 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 	STARTUPINFOA si;
 	PROCESS_INFORMATION pi;
 
-	HANDLE hClientOut_rd, hClientOut_wr; 
+	HANDLE hClientOut_rd, hClientOut_wr;
 	HANDLE hClientIn_rd, hClientIn_wr;
-  
+
 	if(!CreatePipe(&hClientOut_rd, &hClientOut_wr, NULL, 0)) {
 		return NULL;
 	}
@@ -690,7 +690,7 @@ static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::strin
 		CloseHandle(hClientOut_wr);
 		return NULL;
 	}
-	
+
 	CloseHandle(pi.hThread);
 
 	CloseHandle(hClientIn_rd);
@@ -968,7 +968,7 @@ static void res_close(RES_INFO* res_info) {
 
 #endif
 
-static std::string get_line(int fd) 
+static std::string get_line(int fd)
 {
 	char c = 0;
 	char add[2] = {0};
@@ -1802,7 +1802,7 @@ void* watch_thread(void* param)
 		hostname = httpd->hostname.c_str();
 
 	if (hostname == NULL && hints.ai_family == AF_UNSPEC)
-                hints.ai_family = AF_INET;
+		hints.ai_family = AF_INET;
 
 	error = getaddrinfo(hostname, httpd->port.c_str(), &hints, &res);
 	if (error) {

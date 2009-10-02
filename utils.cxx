@@ -47,7 +47,7 @@
 
 namespace tthttpd {
 
-const std::string base64_chars = 
+const std::string base64_chars =
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	"abcdefghijklmnopqrstuvwxyz"
 	"0123456789+/";
@@ -225,7 +225,7 @@ int wcwidth(wchar_t ucs)
 
   /* if we arrive here, ucs is not a combining or C0/C1 control character */
 
-  return 1 + 
+  return 1 +
     (ucs >= 0x1100 &&
      (ucs <= 0x115f ||                    /* Hangul Jamo init. consonants */
       (ucs >= 0x2e80 && ucs <= 0xa4cf && (ucs & ~0x0011) != 0x300a &&
@@ -991,7 +991,7 @@ std::string url_decode(const std::string& url) {
 
 std::string url_encode(const std::string& url) {
 	std::ostringstream rets;
-	for(size_t n = 0; n < url.size(); n++) { 
+	for(size_t n = 0; n < url.size(); n++) {
 		unsigned char c = (unsigned char)url[n];
 		if (isalnum(c) || c == '_' || c == '.' || c == '/' )
 			rets << c;
