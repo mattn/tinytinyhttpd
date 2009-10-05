@@ -411,7 +411,7 @@ static void my_perror(std::string mes) {
 }
 
 #ifdef _WIN32
-static RES_INFO* res_fopen(std::string file) {
+static RES_INFO* res_fopen(std::string& file) {
 	HANDLE hFile;
 	hFile = CreateFileA(
 		file.c_str(),
@@ -432,12 +432,12 @@ static RES_INFO* res_fopen(std::string file) {
 	return res_info;
 }
 
-static bool res_isfile(std::string file) {
+static bool res_isfile(std::string& file) {
 	DWORD dwAttr = GetFileAttributesA(file.c_str());
 	return (dwAttr != (DWORD)-1 && (dwAttr & FILE_ATTRIBUTE_NORMAL));
 }
 
-static bool res_isdir(std::string file) {
+static bool res_isdir(std::string& file) {
 	DWORD dwAttr = GetFileAttributesA(file.c_str());
 	return (dwAttr != (DWORD)-1 && (dwAttr & FILE_ATTRIBUTE_DIRECTORY));
 }
@@ -512,7 +512,7 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
 	return false;
 }
 
-static std::vector<server::ListInfo> res_flist(std::string path) {
+static std::vector<server::ListInfo> res_flist(std::string& path) {
 	WIN32_FIND_DATAA fData;
 	std::vector<server::ListInfo> ret;
 	if (path.size() && path[path.size()-1] != '/')
@@ -541,7 +541,7 @@ static unsigned long res_fsize(RES_INFO* res_info) {
 	return GetFileSize(res_info->read, NULL);
 }
 
-static std::string res_ftime(std::string file, int diff = 0) {
+static std::string res_ftime(std::string& file, int diff = 0) {
 	HANDLE hFile;
 	hFile = CreateFileA(
 		file.c_str(),
@@ -617,7 +617,7 @@ static unsigned long res_read(RES_INFO* res_info, char* data, unsigned long size
 	return dwRead;
 }
 
-static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs) {
+static RES_INFO* res_popen(std::vector<std::string>& args, std::vector<std::string>& envs) {
 	int envs_len = 1;
 	int n;
 	char *envs_ptr;
@@ -742,7 +742,7 @@ static void res_close(RES_INFO* res_info) {
 	}
 }
 #else
-static RES_INFO* res_fopen(std::string file) {
+static RES_INFO* res_fopen(std::string& file) {
 	FILE* fp = fopen(file.c_str(), "rb");
 	if (!fp)
 		return NULL;
@@ -755,13 +755,13 @@ static RES_INFO* res_fopen(std::string file) {
 	return res_info;
 }
 
-static bool res_isfile(std::string file) {
+static bool res_isfile(std::string& file) {
 	struct stat statbuf = {0};
 	stat(file.c_str(), &statbuf);
 	return statbuf.st_mode & S_IFREG;
 }
 
-static bool res_isdir(std::string file) {
+static bool res_isdir(std::string& file) {
 	struct stat statbuf = {0};
 	stat(file.c_str(), &statbuf);
 	return statbuf.st_mode & S_IFDIR;
@@ -817,7 +817,7 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
 	return false;
 }
 
-static std::vector<server::ListInfo> res_flist(std::string path) {
+static std::vector<server::ListInfo> res_flist(std::string& path) {
 	std::vector<server::ListInfo> ret;
 	DIR* dir;
 	struct dirent* dirp;
@@ -848,7 +848,7 @@ static unsigned long res_fsize(RES_INFO* res_info) {
 	return statbuf.st_size;
 }
 
-static std::string res_ftime(std::string file, int diff = 0) {
+static std::string res_ftime(std::string& file, int diff = 0) {
 	struct stat statbuf = {0};
 	stat(file.c_str(), &statbuf);
 	time_t tt = statbuf.st_mtime + diff;
@@ -903,7 +903,7 @@ static void res_popen_sigchild(int signo) {
     wait(0);
 }
 
-static RES_INFO* res_popen(std::vector<std::string> args, std::vector<std::string> envs) {
+static RES_INFO* res_popen(std::vector<std::string>& args, std::vector<std::string>& envs) {
     int filedesr[2], filedesw[2];
     pid_t child;
     long flags;
