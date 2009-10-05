@@ -402,7 +402,7 @@ static RES_INFO* res_fopen(std::string file) {
 		FILE_SHARE_READ,
 		NULL,
 		OPEN_EXISTING,
-		FILE_ATTRIBUTE_NORMAL,
+		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
 		NULL);
 	if (hFile == INVALID_HANDLE_VALUE)
 		return NULL;
@@ -527,7 +527,7 @@ static std::string res_ftime(std::string file, int diff = 0) {
 		FILE_SHARE_READ,
 		NULL,
 		OPEN_EXISTING,
-		FILE_ATTRIBUTE_NORMAL,
+		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
 		NULL);
 	if (hFile == INVALID_HANDLE_VALUE)
 		return "";
@@ -1695,10 +1695,11 @@ request_done:
 				0,
 				NULL,
 				NULL,
-				0)) sent = total;
+				TF_WRITE_BEHIND)) sent = total;
 #endif
 		}
 		if (!sent) {
+			if (VERBOSE(1)) printf("transfer file using default function\n");
 			while(total != 0) {
 				memset(buf, 0, sizeof(buf));
 				unsigned long read = res_read(res_info, buf, sizeof(buf));
