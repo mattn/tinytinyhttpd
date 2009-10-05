@@ -1980,15 +1980,14 @@ void* watch_thread(void* param)
 							&on, sizeof(on)) == -1)
 					fprintf(stderr, "setsockopt TCP_NODELAY: %s\n", strerror(errno));
 
-				int value;
-
-				value = 3;
+				struct timeval timeout;
+				timeout.tv_sec = 3;
+				timeout.tv_usec = 0;
 				if (setsockopt(msgsock, SOL_SOCKET, SO_SNDTIMEO,
-							(char*)&value, sizeof(value)) == -1)
+							(char*)&timeout, sizeof(timeout)) == -1)
 					fprintf(stderr, "setsockopt SO_SNDTIMEO: %s\n", strerror(errno));
-				value = 3;
 				if (setsockopt(msgsock, SOL_SOCKET, SO_RCVTIMEO,
-							(char*)&value, sizeof(value)) == -1)
+							(char*)&timeout, sizeof(timeout)) == -1)
 					fprintf(stderr, "setsockopt SO_RCVTIMEO: %s\n", strerror(errno));
 
 #if defined(_WIN32) && !defined(USE_PTHREAD)
