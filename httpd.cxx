@@ -51,6 +51,23 @@
 #include <sys/uio.h>
 #elif defined _WIN32
 #include <mswsock.h>
+#ifndef WSAID_TRANSMITFILE
+#define WSAID_TRANSMITFILE \
+	        {0xb5367df0,0xcbac,0x11cf,{0x95,0xca,0x00,0x80,0x5f,0x48,0xa1,0x92}}
+
+typedef
+BOOL
+(PASCAL FAR * LPFN_TRANSMITFILE)(
+    IN SOCKET hSocket,
+    IN HANDLE hFile,
+    IN DWORD nNumberOfBytesToWrite,
+    IN DWORD nNumberOfBytesPerSend,
+    IN LPOVERLAPPED lpOverlapped,
+    IN LPTRANSMIT_FILE_BUFFERS lpTransmitBuffers,
+    IN DWORD dwReserved
+    );
+#endif
+static LPFN_TRANSMITFILE lpfnTransmitFile = NULL;
 #endif
 
 extern char* crypt(const char *key, const char *setting);
@@ -415,6 +432,11 @@ static RES_INFO* res_fopen(std::string file) {
 	return res_info;
 }
 
+static bool res_isfile(std::string file) {
+	DWORD dwAttr = GetFileAttributesA(file.c_str());
+	return (dwAttr != (DWORD)-1 && (dwAttr & FILE_ATTRIBUTE_NORMAL));
+}
+
 static bool res_isdir(std::string file) {
 	DWORD dwAttr = GetFileAttributesA(file.c_str());
 	return (dwAttr != (DWORD)-1 && (dwAttr & FILE_ATTRIBUTE_DIRECTORY));
@@ -731,6 +753,12 @@ static RES_INFO* res_fopen(std::string file) {
 	res_info->process = 0;
 	res_info->size = (unsigned long)-1;
 	return res_info;
+}
+
+static bool res_isfile(std::string file) {
+	struct stat statbuf = {0};
+	stat(file.c_str(), &statbuf);
+	return statbuf.st_mode & S_IFREG;
 }
 
 static bool res_isdir(std::string file) {
@@ -1263,9 +1291,7 @@ request_top:
 					try_path += "/";
 				for(it_page = httpd->default_pages.begin(); it_page != httpd->default_pages.end(); it_page++) {
 					std::string check_path = try_path + *it_page;
-					res_info = res_fopen(check_path);
-					if (res_info) {
-						res_close(res_info);
+					if (res_isfile(check_path)) {
 						path = check_path;
 						break;
 					}
@@ -1688,7 +1714,7 @@ request_done:
 #elif defined FREEBSD_SENDFILE_API
 			sendfile(msgsock, fileno(res_info->read), total, &sent, NULL, 0);
 #elif defined _WIN32
-			if (TransmitFile(
+			if (lpfnTransmitFile && lpfnTransmitFile(
 				msgsock,
 				res_info->read,
 				total,
@@ -1771,7 +1797,6 @@ request_end:
 
 void* watch_thread(void* param)
 {
-
 	server *httpd = (server*)param;
 	int msgsock;
 
@@ -1791,6 +1816,11 @@ void* watch_thread(void* param)
 	struct addrinfo *res, *res0;
 	int error;
 	const char *hostname;
+#ifdef _WIN32
+	char on;
+#else
+	int on;
+#endif
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = httpd->family;
@@ -1815,11 +1845,6 @@ void* watch_thread(void* param)
 
 	for ( ; res; res = res->ai_next) {
 		int listen_sock;
-#ifdef _WIN32
-		char on = 1;
-#else
-		int on = 1;
-#endif
 		unsigned int salen;
 		char ntop[NI_MAXHOST], strport[NI_MAXSERV];
 
@@ -1839,9 +1864,15 @@ void* watch_thread(void* param)
 			continue;
 		}
 
+		on = 1;
 		if (setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR,
 			&on, sizeof(on)) == -1)
 			fprintf(stderr, "setsockopt SO_REUSEADDR: %s\n", strerror(errno));
+
+		on = 1;
+		if (setsockopt(listen_sock, IPPROTO_TCP, TCP_NODELAY,
+			&on, sizeof(on)) == -1)
+			fprintf(stderr, "setsockopt TCP_NODELAY: %s\n", strerror(errno));
 
 		if (bind(listen_sock, sa, salen) < 0) {
 			fprintf(stderr, "bind to port %s on %s failed: %.200s.\n",
@@ -1872,6 +1903,16 @@ void* watch_thread(void* param)
 		httpd->hostaddr.push_back(ntop);
 		// XXX: overwrite
 		httpd->port = strport;
+#ifdef _WIN32
+		if (!lpfnTransmitFile) {
+			GUID  guidTransmitFile = WSAID_TRANSMITFILE;
+			DWORD dwBytes = 0;
+			lpfnTransmitFile = NULL;
+			WSAIoctl(listen_sock, SIO_GET_EXTENSION_FUNCTION_POINTER, &guidTransmitFile, sizeof(GUID), &lpfnTransmitFile, sizeof(LPVOID), &dwBytes, NULL, NULL);
+			if (lpfnTransmitFile == NULL)
+				fprintf(stderr, "could not get winsock extension\n");
+		}
+#endif
 	}
 
 	freeaddrinfo(res0);
@@ -1919,9 +1960,9 @@ void* watch_thread(void* param)
 			} else {
 				char address[NI_MAXHOST], port[NI_MAXSERV];
 
-				if (httpd->family == AF_INET)
+				if (httpd->family == AF_INET) {
 					strcpy(address, inet_ntoa(((struct sockaddr_in *)&client)->sin_addr));
-				else {
+				} else {
 					if (getnameinfo((struct sockaddr*)&client, client_len, address, sizeof(address), port,
 							sizeof(port), numeric_host | NI_NUMERICSERV))
 						fprintf(stderr, "could not get peername\n");
@@ -1934,14 +1975,21 @@ void* watch_thread(void* param)
 				pHttpdInfo->port = port;
 				pHttpdInfo->servno = fds;
 
+				on = 1;
+				if (setsockopt(msgsock, IPPROTO_TCP, TCP_NODELAY,
+							&on, sizeof(on)) == -1)
+					fprintf(stderr, "setsockopt TCP_NODELAY: %s\n", strerror(errno));
+
 				int value;
 
-				value = 1;
-				setsockopt(msgsock, IPPROTO_TCP, TCP_NODELAY, (char*)&value, sizeof(value));
 				value = 3;
-				setsockopt(msgsock, SOL_SOCKET, SO_SNDTIMEO, (char*)&value, sizeof(value));
+				if (setsockopt(msgsock, SOL_SOCKET, SO_SNDTIMEO,
+							(char*)&value, sizeof(value)) == -1)
+					fprintf(stderr, "setsockopt SO_SNDTIMEO: %s\n", strerror(errno));
 				value = 3;
-				setsockopt(msgsock, SOL_SOCKET, SO_RCVTIMEO, (char*)&value, sizeof(value));
+				if (setsockopt(msgsock, SOL_SOCKET, SO_RCVTIMEO,
+							(char*)&value, sizeof(value)) == -1)
+					fprintf(stderr, "setsockopt SO_RCVTIMEO: %s\n", strerror(errno));
 
 #if defined(_WIN32) && !defined(USE_PTHREAD)
 				uintptr_t th;

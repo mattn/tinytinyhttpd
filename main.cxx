@@ -113,12 +113,6 @@ int main(int argc, char* argv[]) {
 	int verbose = 0;
 	int family = AF_UNSPEC;
 
-
-#ifdef _WIN32
-	WSADATA wsaData;
-	WSAStartup(MAKEWORD(2, 2), &wsaData);
-#endif
-
 	opterr = 0;
 	while ((c = getopt(argc, (char**)argv, "46p:c:d:xvh") != -1)) {
 		switch (optopt) {
@@ -163,9 +157,14 @@ int main(int argc, char* argv[]) {
 			NULL
 		};
 		for (const char** ptr = lines; *ptr; ptr++)
-			std::cerr << *ptr << std::endl;
-		exit(1);
+			fprintf(stderr, "%s\n", *ptr);
+		return -1;
 	}
+
+#ifdef _WIN32
+	WSADATA wsaData;
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
+#endif
 
 	tthttpd::server httpd(port);
 	httpd.bindRoot(root);

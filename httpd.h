@@ -28,7 +28,6 @@
 #ifdef _MSC_VER
 #pragma warning(disable:4018 4503 4530 4786 4996)
 #pragma comment(lib, "ws2_32.lib")
-#pragma comment(lib, "mswsock.lib")
 #define _CRT_SECURE_NO_WARNINGS
 #endif
 
