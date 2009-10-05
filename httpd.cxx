@@ -444,7 +444,7 @@ static bool res_isdir(std::string& file) {
 
 static bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
 	std::vector<std::string> split_path = split_string(file, "/");
-	std::string path = "";
+	std::string path;
 	const char* env = getenv("PATHEXT");
 	std::string pathext = env ? env : "";
 	std::transform(pathext.begin(), pathext.end(), pathext.begin(), ::tolower);
@@ -484,7 +484,7 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 
 static bool res_iscgi(std::string& file, std::string& path_info, std::string& script_name, server::MimeTypes& mime_types, std::string& type) {
 	std::vector<std::string> split_path = split_string(file, "/");
-	std::string path = "";
+	std::string path;
 
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
 		if (it->empty()) continue;
@@ -769,7 +769,7 @@ static bool res_isdir(std::string& file) {
 
 static bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
 	std::vector<std::string> split_path = split_string(file, "/");
-	std::string path = "";
+	std::string path;
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
 		if (it->empty()) continue;
 		path += "/";
@@ -790,7 +790,7 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 
 static bool res_iscgi(std::string& file, std::string& path_info, std::string& script_name, server::MimeTypes& mime_types, std::string& type) {
 	std::vector<std::string> split_path = split_string(file, "/");
-	std::string path = "";
+	std::string path;
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
 		if (it->empty()) continue;
 		path += "/";
@@ -1049,22 +1049,22 @@ void* response_thread(void* param)
 
 request_top:
 	keep_alive = false;
-	res_code = "";
-	res_proto = "";
-	res_msg = "";
-	res_type = "";
-	res_head = "";
-	res_body = "";
+	res_code.clear();
+	res_proto.clear();
+	res_msg.clear();
+	res_type.clear();
+	res_head.clear();
+	res_body.clear();
 	res_info = NULL;
-	http_user_agent = "";
-	http_accept = "";
-	http_connection = "";
-	http_cookie = "";
-	http_authorization = "";
-	http_referer = "";
-	content_type = "";
+	http_user_agent.clear();
+	http_accept.clear();
+	http_connection.clear();
+	http_cookie.clear();
+	http_authorization.clear();
+	http_referer.clear();
+	content_type.clear();
 	content_length = 0;
-	if_modified_since = "";
+	if_modified_since.clear();
 	vauth.clear();
 
 	req = get_line(msgsock);
@@ -1401,7 +1401,7 @@ request_top:
 						res_type = "text/plain";
 						res_code = "304";
 						res_msg = "Not Modified";
-						res_body = "";
+						res_body.clear();
 						goto request_done;
 					}
 					res_head += "Content-Type: ";
@@ -1639,7 +1639,7 @@ request_done:
 
 	if (res_info && res_info->process) {
 		bool res_keep_alive = false;
-		res_head = "";
+		res_head.clear();
 
 		str = req;
 		while(str.size()) {
@@ -1651,7 +1651,7 @@ request_done:
 			if (str[0] == '<') {
 				// workaround for broken non-header response.
 				send(msgsock, ptr, strlen(ptr), 0);
-				res_code = "";
+				res_code.clear();
 				break;
 			}
 			if (VERBOSE(2)) printf("  %s\n", ptr);
