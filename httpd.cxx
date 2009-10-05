@@ -1695,7 +1695,7 @@ request_done:
 				0,
 				NULL,
 				NULL,
-				0)) sent = count;
+				0)) sent = total;
 #endif
 		}
 		if (!sent) {
