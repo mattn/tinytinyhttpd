@@ -1,3 +1,8 @@
+2009-10-05: version 0.0.9
+
+	* IPv6 support.
+	* sendfile support: on win32, use TransmitFile API.
+
 2009-09-28: version 0.0.8
 
 	* fixed keep-alive.
