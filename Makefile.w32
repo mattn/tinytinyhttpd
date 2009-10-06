@@ -3,10 +3,10 @@
 all : tthttpd.exe
 
 tthttpd.exe : main.o httpd.o utils.o
-	g++ -O2 -mthreads -o $@ main.o httpd.o utils.o -lws2_32
+	g++ -O2 -mtune=i686 -mthreads -o $@ main.o httpd.o utils.o -lws2_32
 
 .cxx.o :
-	g++ -O2 -Wall -mthreads -c $<
+	g++ -O2 -mtune=i686 -mthreads -Wall -c $<
 
 clean :
 	rm *.o tthttpd

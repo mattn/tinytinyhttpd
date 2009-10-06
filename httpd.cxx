@@ -1034,8 +1034,6 @@ void* response_thread(void* param)
 	std::string str, req, ret;
 	std::vector<std::string> vparam;
 	std::vector<std::string> vauth;
-	std::string refer;
-	char length[256];
 	std::string res_code;
 	std::string res_proto;
 	std::string res_msg;
@@ -1050,10 +1048,11 @@ void* response_thread(void* param)
 	std::string http_referer;
 	std::string http_authorization;
 	std::string if_modified_since;
-	unsigned long content_length;
 	std::string content_type;
-	RES_INFO* res_info = NULL;
+	unsigned long content_length;
+	RES_INFO* res_info;
 	char buf[BUFSIZ];
+	char length[256];
 	bool keep_alive;
 
 request_top:
@@ -1081,10 +1080,9 @@ request_top:
 	if (req.size() == 0) {
 		goto request_end;
 	}
-	str = req;
 	if (VERBOSE(1)) printf("* %s\n", str.c_str());
 
-	while(str.size()) {
+	do {
 		str = get_line(msgsock);
 		if (str.empty()) break;
 		const char *key, *ptr = str.c_str();
@@ -1150,12 +1148,12 @@ request_top:
 		key = "host:";
 		len = strlen(key);
 		if (!strnicmp(ptr, key, len)) {
-			char* stp = strchr(ptr + len, ':');
+			char* stp = (char*)strchr(ptr + len, ':');
 			if (stp) *stp = 0;
 			http_host = trim_string(ptr + len);
 			continue;
 		}
-	}
+	} while (true);
 
 	if (httpd->loggerfunc) {
 		httpd->loggerfunc(pHttpdInfo, req);
@@ -1666,8 +1664,7 @@ request_done:
 		bool res_keep_alive = false;
 		res_head.clear();
 
-		str = req;
-		while(str.size()) {
+		do {
 			memset(buf, 0, sizeof(buf));
 			str = res_fgets(res_info);
 			if (str.empty()) break;
@@ -1707,7 +1704,7 @@ request_done:
 			}
 			res_head += ptr;
 			res_head += "\r\n";
-		}
+		} while (true);
 		if (!res_keep_alive) {
 			keep_alive = false;
 			if (http_connection.empty()) {
@@ -1846,6 +1843,7 @@ void* watch_thread(void* param)
 #else
 	int on;
 #endif
+	struct timeval timeout;
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = httpd->family;
@@ -1951,9 +1949,12 @@ void* watch_thread(void* param)
 	int fdsetsz = howmany(maxfd + 1, NFDBITS) * sizeof(fd_mask);
 	fd_set *fdset = (fd_set *)malloc(fdsetsz);
 
-	for(;;) {
-		int fds, nfds;
+	struct sockaddr_storage client;
+	int client_len = sizeof(client);
+	int fds, nfds;
+	char address[NI_MAXHOST], port[NI_MAXSERV];
 
+	for(;;) {
 		memset(fdset, 0, fdsetsz);
 
 		for(fds = 0; fds < nserver; fds++)
@@ -1969,8 +1970,6 @@ void* watch_thread(void* param)
 			if (!FD_ISSET(sock, &fdset[fds]))
 				continue;
 
-			struct sockaddr_storage client;
-			int client_len = sizeof(client);
 			memset(&client, 0, sizeof(client));
 			msgsock = accept(sock, (struct sockaddr *)&client, (socklen_t *)&client_len);
 			if (VERBOSE(3)) printf("* accepted socket %d\n", msgsock);
@@ -1983,8 +1982,6 @@ void* watch_thread(void* param)
 				*/
 				continue;
 			} else {
-				char address[NI_MAXHOST], port[NI_MAXSERV];
-
 				if (httpd->family == AF_INET) {
 					strcpy(address, inet_ntoa(((struct sockaddr_in *)&client)->sin_addr));
 				} else {
@@ -2005,7 +2002,6 @@ void* watch_thread(void* param)
 							&on, sizeof(on)) == -1)
 					fprintf(stderr, "setsockopt TCP_NODELAY: %s\n", strerror(errno));
 
-				struct timeval timeout;
 				timeout.tv_sec = 3;
 				timeout.tv_usec = 0;
 				if (setsockopt(msgsock, SOL_SOCKET, SO_SNDTIMEO,
