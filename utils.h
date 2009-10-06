@@ -107,6 +107,7 @@ std::string cut_string(std::string str, int cells, std::string padding = "...");
 std::string cut_string_r(std::string str, int cells, std::string padding = "...");
 
 std::vector<std::string> split_string(const std::string strSrc, const std::string strKey);
+void split_string(const std::string strSrc, const std::string strKey, std::vector<std::string>& res);
 std::string trim_string(const std::string strSrc);
 std::string& replace_string(std::string& strSrc, const std::string strFrom, const std::string strTo);
 #ifdef UNICODE

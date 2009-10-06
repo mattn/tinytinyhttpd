@@ -118,9 +118,9 @@ int main(int argc, char* argv[]) {
 		switch (optopt) {
 		case '4': family = AF_INET;  break;
 		case '6': family = AF_INET6; break;
-		case 'p': port = optarg; break;
-		case 'c': cfg = optarg; break;
-		case 'd': root = optarg; break;
+		case 'p': if (optarg) port = optarg; break;
+		case 'c': if (optarg) cfg = optarg; break;
+		case 'd': if (optarg) root = optarg; break;
 		case 'v': verbose++; break;
 #ifdef PACKAGE_VERSION
 		case 'V':

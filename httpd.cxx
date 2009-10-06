@@ -434,7 +434,7 @@ static RES_INFO* res_fopen(std::string& file) {
 
 static bool res_isfile(std::string& file) {
 	DWORD dwAttr = GetFileAttributesA(file.c_str());
-	return (dwAttr != (DWORD)-1 && (dwAttr & FILE_ATTRIBUTE_NORMAL));
+	return (dwAttr != (DWORD)-1 && !(dwAttr & FILE_ATTRIBUTE_DIRECTORY));
 }
 
 static bool res_isdir(std::string& file) {
@@ -443,14 +443,17 @@ static bool res_isdir(std::string& file) {
 }
 
 static bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
-	std::vector<std::string> split_path = split_string(file, "/");
+	std::vector<std::string> split_path;
 	std::string path;
 	const char* env = getenv("PATHEXT");
 	std::string pathext = env ? env : "";
-	std::transform(pathext.begin(), pathext.end(), pathext.begin(), ::tolower);
 
-	std::vector<std::string> pathexts = split_string(pathext, ";");
+	std::vector<std::string> pathexts;
 	std::vector<std::string>::iterator itext;
+
+	split_string(file, "/", split_path);
+	std::transform(pathext.begin(), pathext.end(), pathext.begin(), ::tolower);
+	split_string(pathext, ";", pathexts);
 
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
 		if (it->empty()) continue;
@@ -483,9 +486,10 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 }
 
 static bool res_iscgi(std::string& file, std::string& path_info, std::string& script_name, server::MimeTypes& mime_types, std::string& type) {
-	std::vector<std::string> split_path = split_string(file, "/");
+	std::vector<std::string> split_path;
 	std::string path;
 
+	split_string(file, "/", split_path);
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
 		if (it->empty()) continue;
 		if (!path.empty()) path += "/";
@@ -768,8 +772,10 @@ static bool res_isdir(std::string& file) {
 }
 
 static bool res_isexe(std::string& file, std::string& path_info, std::string& script_name) {
-	std::vector<std::string> split_path = split_string(file, "/");
+	std::vector<std::string> split_path;
 	std::string path;
+
+	split_string(file, "/", split_path);
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
 		if (it->empty()) continue;
 		path += "/";
@@ -789,8 +795,10 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
 }
 
 static bool res_iscgi(std::string& file, std::string& path_info, std::string& script_name, server::MimeTypes& mime_types, std::string& type) {
-	std::vector<std::string> split_path = split_string(file, "/");
+	std::vector<std::string> split_path;
 	std::string path;
+
+	split_string(file, "/", split_path);
 	for (std::vector<std::string>::iterator it = split_path.begin(); it != split_path.end(); it++) {
 		if (it->empty()) continue;
 		path += "/";
@@ -1034,6 +1042,7 @@ void* response_thread(void* param)
 	std::string res_type;
 	std::string res_body;
 	std::string res_head;
+	std::string http_host;
 	std::string http_accept;
 	std::string http_user_agent;
 	std::string http_connection;
@@ -1056,6 +1065,7 @@ request_top:
 	res_head.clear();
 	res_body.clear();
 	res_info = NULL;
+	http_host.clear();
 	http_user_agent.clear();
 	http_accept.clear();
 	http_connection.clear();
@@ -1125,16 +1135,24 @@ request_top:
 			content_type = trim_string(ptr + len);
 			continue;
 		}
-		key = "Authorization:";
+		key = "authorization:";
 		len = strlen(key);
 		if (!strnicmp(ptr, key, len)) {
 			http_authorization = trim_string(ptr + len);
 			continue;
 		}
-		key = "REFERER:";
+		key = "referer:";
 		len = strlen(key);
 		if (!strnicmp(ptr, key, len)) {
 			http_referer = trim_string(ptr + len);
+			continue;
+		}
+		key = "host:";
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			char* stp = strchr(ptr + len, ':');
+			if (stp) *stp = 0;
+			http_host = trim_string(ptr + len);
 			continue;
 		}
 	}
@@ -1143,8 +1161,7 @@ request_top:
 		httpd->loggerfunc(pHttpdInfo, req);
 	}
 
-	vparam = split_string(req, " ");
-
+	split_string(req, " ", vparam);
 	try {
 		if (httpd->accept_ips.size() > 0 &&
 				std::find(httpd->accept_ips.begin(), httpd->accept_ips.end(), address) == httpd->accept_ips.end()) {
@@ -1167,7 +1184,7 @@ request_top:
 			if (http_authorization.size()) {
 				if (!strnicmp(http_authorization.c_str(), "basic ", 6))
 					auth_basic = base64_decode(http_authorization.c_str()+6);
-				vauth = split_string(auth_basic, ":");
+				split_string(auth_basic, ":", vauth);
 			}
 			if (vparam[0] == "GET" || vparam[0] == "POST" || vparam[0] == "HEAD") {
 				std::string root = server::get_realpath(httpd->root + "/");
@@ -1219,8 +1236,9 @@ request_top:
 				*/
 
 				std::vector<server::BasicAuthInfo>::iterator it_basicauth;
+				std::vector<std::string> methods;
 				for (it_basicauth = httpd->basic_auths.begin(); it_basicauth != httpd->basic_auths.end(); it_basicauth++) {
-					std::vector<std::string> methods = split_string(it_basicauth->method, "/");
+					split_string(it_basicauth->method, "/", methods);
 					if (!methods.empty() && std::find(methods.begin(), methods.end(), vparam[0]) == methods.end()) continue;
 					if (!it_basicauth->target.empty() && strncmp(vparam[1].c_str(), it_basicauth->target.c_str(), it_basicauth->target.size())) continue;
 					break;
@@ -1436,9 +1454,16 @@ request_top:
 
 					std::string env;
 
-					sprintf(buf, "HTTP_HOST=%s:%s", httpd->hostname.c_str(), httpd->port.c_str());
-					env = buf;
-					envs.push_back(env);
+					if (http_host.size()) {
+						sprintf(buf, "HTTP_HOST=%s:%s", http_host.c_str(), httpd->port.c_str());
+						env = buf;
+						envs.push_back(env);
+					} else
+					if (httpd->hostname.size()) {
+						sprintf(buf, "HTTP_HOST=%s:%s", httpd->hostname.c_str(), httpd->port.c_str());
+						env = buf;
+						envs.push_back(env);
+					}
 
 					env = "SERVER_PROTOCOL=HTTP/1.1";
 					envs.push_back(env);
@@ -1714,7 +1739,7 @@ request_done:
 #elif defined FREEBSD_SENDFILE_API
 			sendfile(msgsock, fileno(res_info->read), total, &sent, NULL, 0);
 #elif defined _WIN32
-			if (lpfnTransmitFile && lpfnTransmitFile(
+			if (!res_info->process && lpfnTransmitFile && lpfnTransmitFile(
 				msgsock,
 				res_info->read,
 				total,
@@ -1948,7 +1973,7 @@ void* watch_thread(void* param)
 			int client_len = sizeof(client);
 			memset(&client, 0, sizeof(client));
 			msgsock = accept(sock, (struct sockaddr *)&client, (socklen_t *)&client_len);
-			if (VERBOSE(3)) printf("accepted socket %d\n", msgsock);
+			if (VERBOSE(3)) printf("* accepted socket %d\n", msgsock);
 			if (msgsock == -1) {
 				if (errno != EINTR && errno != EWOULDBLOCK)
 					if (VERBOSE(1)) printf("accept %s", strerror(errno));

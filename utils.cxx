@@ -754,6 +754,25 @@ std::vector<std::string> split_string(std::string strSrc, std::string strKey) {
 		int iOldIndex = iIndex;
 		iIndex = strTmp.find(strKey, iIndex);
 		if(iIndex != std::string::npos) {
+			vecLines.push_back(strTmp.substr(iOldIndex, iIndex - iOldIndex));
+		} else {
+			vecLines.push_back(strTmp.substr(iOldIndex));
+			break;
+		}
+		iIndex += strKey.length();
+	}
+	return vecLines;
+}
+
+void split_string(std::string strSrc, std::string strKey, std::vector<std::string>& vecLines) {
+	std::string strTmp = strSrc;
+
+	vecLines.clear();
+	size_t iIndex = 0;
+	while (iIndex < strTmp.length()) {
+		int iOldIndex = iIndex;
+		iIndex = strTmp.find(strKey, iIndex);
+		if(iIndex != std::string::npos) {
 			std::string item = strTmp.substr(iOldIndex, iIndex - iOldIndex);
 			vecLines.push_back(item);
 		} else {
@@ -763,7 +782,6 @@ std::vector<std::string> split_string(std::string strSrc, std::string strKey) {
 		}
 		iIndex += strKey.length();
 	}
-	return vecLines;
 }
 
 #ifdef _UNICODE

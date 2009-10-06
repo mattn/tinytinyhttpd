@@ -169,7 +169,7 @@ public:
 	std::string get_fs_charset() {
 		return fs_charset;
 	}
-	void setAuthentication(BasicAuths _basic_auths) {
+	void setAuthentication(BasicAuths& _basic_auths) {
 		basic_auths = _basic_auths;
 	}
 	void bindRoot(std::string _root) {
@@ -192,7 +192,8 @@ public:
 		size_t end_pos = path.find_last_of('?');
 		if (end_pos != std::string::npos) path.resize(end_pos);
 
-		std::vector<std::string> path_sep = split_string(path, "/");
+		std::vector<std::string> path_sep;
+		split_string(path, "/", path_sep);
 		std::vector<std::string>::iterator it;
 		while(true) {
 			it = std::find(path_sep.begin(), path_sep.end(), "..");
