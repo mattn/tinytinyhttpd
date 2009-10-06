@@ -1812,6 +1812,8 @@ request_end:
 	delete pHttpdInfo;
 #if defined(_WIN32) && !defined(USE_PTHREAD)
 	_endthread();
+#else
+	pthread_exit(NULL);
 #endif
 
 	return NULL;
@@ -1957,10 +1959,14 @@ void* watch_thread(void* param)
 	for(;;) {
 		memset(fdset, 0, fdsetsz);
 
+		//timeout.tv_sec = 1;
+		//timeout.tv_usec = 0;
 		for(fds = 0; fds < nserver; fds++)
 			FD_SET(httpd->socks[fds], fdset);
 		nfds = select(maxfd + 1, fdset, NULL, NULL, NULL);
 		if (nfds == -1) {
+			if (errno == EBADF)
+				break;
 			my_perror("select");
 			continue;
 		}
@@ -1975,7 +1981,7 @@ void* watch_thread(void* param)
 			if (VERBOSE(3)) printf("* accepted socket %d\n", msgsock);
 			if (msgsock == -1) {
 				if (errno != EINTR && errno != EWOULDBLOCK)
-					if (VERBOSE(1)) printf("accept %s", strerror(errno));
+					if (VERBOSE(1)) my_perror("accept");
 				closesocket(msgsock);
 				/*
 				  break;
@@ -2027,11 +2033,13 @@ void* watch_thread(void* param)
 		}
 	}
 
+	delete[] fdset;
+
 #if defined(_WIN32) && !defined(USE_PTHREAD)
 	_endthread();
+#else
+	pthread_exit(NULL);
 #endif
-
-	delete[] fdset;
 
 	return NULL;
 }
@@ -2051,9 +2059,17 @@ bool server::start() {
 }
 
 bool server::stop() {
+	if (verbose_mode >= 1)
+		printf("exiting...\n");
 	for(std::vector<unsigned int>::iterator sock = socks.begin(); sock != socks.end(); sock++){
+		shutdown(*sock, SD_BOTH);
 		closesocket(*sock);
 	}
+#if defined(_WIN32) && !defined(USE_PTHREAD)
+	TerminateThread(thread);
+#else
+	pthread_kill(thread, SIGINT);
+#endif
 	wait();
 	return true;
 }
@@ -2065,6 +2081,10 @@ bool server::wait() {
 	pthread_join(thread, NULL);
 #endif
 	return true;
+}
+
+bool server::is_running() {
+	return thread ? true : false;
 }
 
 }

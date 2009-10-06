@@ -4,6 +4,7 @@
 #include "httpd.h"
 #include <stdio.h>
 #include <string.h>
+#include <signal.h>
 
 int  opterr = 1;
 int  optind = 1;
@@ -104,6 +105,16 @@ bool loadAuthfile(const char* filename, std::vector<tthttpd::server::AuthInfo>& 
 	return true;
 }
 
+tthttpd::server httpd;
+
+static void signal_handler(int num) {
+	static bool stopping = false;
+	if (stopping == false && httpd.is_running()) {
+		stopping = true;
+		httpd.stop();
+	}
+}
+
 int main(int argc, char* argv[]) {
 	int c;
 	const char* root = ".";
@@ -166,7 +177,7 @@ int main(int argc, char* argv[]) {
 	WSAStartup(MAKEWORD(2, 2), &wsaData);
 #endif
 
-	tthttpd::server httpd(port);
+	httpd.port = port;
 	httpd.bindRoot(root);
 	httpd.spawn_executable = spawn_exec;
 	httpd.verbose_mode = verbose;
@@ -249,6 +260,9 @@ int main(int argc, char* argv[]) {
 	httpd.mime_types["py"] = "@/usr/bin/python";
 #endif
 	}
+
+	signal(SIGTERM, signal_handler);
+	signal(SIGINT, signal_handler);
 
 	httpd.start();
 	httpd.wait();

@@ -153,16 +153,13 @@ public:
 		initialize();
 		port = _port;
 	}
-	server(std::string _port, std::string _target) {
-		initialize();
-		port = _port;
-	}
 	~server() {
 		stop();
 	}
 	bool start();
 	bool stop();
 	bool wait();
+	bool is_running();
 	void set_fs_charset(std::string _fs_charset) {
 		fs_charset = _fs_charset;
 	}
