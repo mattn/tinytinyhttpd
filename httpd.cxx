@@ -1983,10 +1983,7 @@ void* watch_thread(void* param)
 				if (errno != EINTR && errno != EWOULDBLOCK)
 					if (VERBOSE(1)) my_perror("accept");
 				closesocket(msgsock);
-				/*
-				  break;
-				*/
-				continue;
+				break;
 			} else {
 				if (httpd->family == AF_INET) {
 					strcpy(address, inet_ntoa(((struct sockaddr_in *)&client)->sin_addr));
@@ -2059,6 +2056,8 @@ bool server::start() {
 }
 
 bool server::stop() {
+	if (!thread)
+		return false;
 	if (verbose_mode >= 1)
 		printf("exiting...\n");
 	for(std::vector<unsigned int>::iterator sock = socks.begin(); sock != socks.end(); sock++){
@@ -2066,7 +2065,7 @@ bool server::stop() {
 		closesocket(*sock);
 	}
 #if defined(_WIN32) && !defined(USE_PTHREAD)
-	TerminateThread(thread);
+	TerminateThread(thread, 0);
 #else
 	pthread_kill(thread, SIGINT);
 #endif
@@ -2080,6 +2079,7 @@ bool server::wait() {
 #else
 	pthread_join(thread, NULL);
 #endif
+	thread = NULL;
 	return true;
 }
 
