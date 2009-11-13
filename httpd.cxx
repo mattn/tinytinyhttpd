@@ -1965,7 +1965,7 @@ void* watch_thread(void* param)
 			FD_SET(httpd->socks[fds], fdset);
 		nfds = select(maxfd + 1, fdset, NULL, NULL, NULL);
 		if (nfds == -1) {
-			if (errno == EBADF)
+			if (errno == EBADF || errno == EINTR)
 				break;
 			my_perror("select");
 			continue;
