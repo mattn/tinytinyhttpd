@@ -1080,7 +1080,7 @@ request_top:
 	if (req.size() == 0) {
 		goto request_end;
 	}
-	if (VERBOSE(1)) printf("* %s\n", str.c_str());
+	if (VERBOSE(1)) printf("* %s\n", req.c_str());
 
 	do {
 		str = get_line(msgsock);
@@ -1301,6 +1301,17 @@ request_top:
 					}
 				}
 
+				if (res_isdir(path) && vparam[1].size() && vparam[1][vparam[1].size()-1] != '/') {
+					res_type = "text/plain";
+					res_code = "301";
+					res_msg = "Document Moved";
+					res_body = "Document Moved\n";
+					res_head = "Location: ";
+					res_head += vparam[1];
+					res_head += "/\n";
+					goto request_done;
+				}
+
 				server::DefaultPages::iterator it_page;
 				std::string try_path = path;
 				if (try_path[try_path.size()-1] != '/')
@@ -1332,67 +1343,57 @@ request_top:
 				}
 
 				if (res_isdir(path)) {
-					if (vparam[1].size() && vparam[1][vparam[1].size()-1] != '/') {
-						res_type = "text/plain";
-						res_code = "301";
-						res_msg = "Document Moved";
-						res_body = "Document Moved\n";
-						res_head = "Location: ";
-						res_head += vparam[1];
-						res_head += "/\n";
-					} else {
 					if (VERBOSE(2)) printf("  listing %s\n", path.c_str());
-						res_type = "text/html";
-						res_code = "200";
-						res_msg = "OK";
-						if (!httpd->fs_charset.empty()) {
-							res_type += "; charset=";
-							res_type += trim_string(httpd->fs_charset);
-						}
-						res_body = "<html><head><title>";
-						res_body += script_name;
-						res_body += "</title></head><body><h1>";
-						res_body += script_name;
-						res_body += "</h1><hr /><pre>";
-						res_body += "<table border=0>";
-						std::vector<server::ListInfo> flist = res_flist(path);
-						std::vector<server::ListInfo>::iterator it;
-
-						// TODO: sort and reverse, sort key
-						//std::map<std::string, std::string> params = tthttpd::parse_querystring(query_string);
-
-						for(it = flist.begin(); it != flist.end(); it++) {
-							res_body += "<tr><td><a href=\"";
-							res_body += tthttpd::url_encode(it->name);
-							res_body += "\">";
-							res_body += it->name;
-							res_body += "</a></td>";
-							res_body += "<td>";
-							struct tm tm = it->date;
-							sprintf(buf, "%02d-%s-%04d %02d:%02d",
-								tm.tm_mday,
-								months[tm.tm_mon],
-								tm.tm_year+1900,
-								tm.tm_hour,
-								tm.tm_min);
-							res_body += buf;
-							res_body += "</td>";
-							res_body += "<td align=right>&nbsp;&nbsp;";
-							if (!it->isdir) {
-								if (it->size < 1000)
-									sprintf(buf, "%d", (int)it->size);
-								else
-								if (it->size < 1000000)
-									sprintf(buf, "%dK", (int)it->size/1000);
-								else
-									sprintf(buf, "%.1dM", (int)it->size/1000000);
-								res_body += buf;
-							} else
-								res_body += "[DIR]";
-							res_body += "</td></tr>";
-						}
-						res_body += "</table></pre ><hr /></body></html>";
+					res_type = "text/html";
+					res_code = "200";
+					res_msg = "OK";
+					if (!httpd->fs_charset.empty()) {
+						res_type += "; charset=";
+						res_type += trim_string(httpd->fs_charset);
 					}
+					res_body = "<html><head><title>";
+					res_body += script_name;
+					res_body += "</title></head><body><h1>";
+					res_body += script_name;
+					res_body += "</h1><hr /><pre>";
+					res_body += "<table border=0>";
+					std::vector<server::ListInfo> flist = res_flist(path);
+					std::vector<server::ListInfo>::iterator it;
+
+					// TODO: sort and reverse, sort key
+					//std::map<std::string, std::string> params = tthttpd::parse_querystring(query_string);
+
+					for(it = flist.begin(); it != flist.end(); it++) {
+						res_body += "<tr><td><a href=\"";
+						res_body += tthttpd::url_encode(it->name);
+						res_body += "\">";
+						res_body += it->name;
+						res_body += "</a></td>";
+						res_body += "<td>";
+						struct tm tm = it->date;
+						sprintf(buf, "%02d-%s-%04d %02d:%02d",
+							tm.tm_mday,
+							months[tm.tm_mon],
+							tm.tm_year+1900,
+							tm.tm_hour,
+							tm.tm_min);
+						res_body += buf;
+						res_body += "</td>";
+						res_body += "<td align=right>&nbsp;&nbsp;";
+						if (!it->isdir) {
+							if (it->size < 1000)
+								sprintf(buf, "%d", (int)it->size);
+							else
+							if (it->size < 1000000)
+								sprintf(buf, "%dK", (int)it->size/1000);
+							else
+								sprintf(buf, "%.1dM", (int)it->size/1000000);
+							res_body += buf;
+						} else
+							res_body += "[DIR]";
+						res_body += "</td></tr>";
+					}
+					res_body += "</table></pre ><hr /></body></html>";
 					goto request_done;
 				}
 
@@ -1693,9 +1694,12 @@ request_done:
 			key = "Status:";
 			len = strlen(key);
 			if (!strnicmp(ptr, key, len)) {
-				res_code = res_proto;
-				res_code += " ";
-				res_code += str.substr(len);
+				std::vector<std::string> codes;
+				split_string(trim_string(str.substr(len)), " ", codes);
+				if (codes.size())
+					res_code = codes[0];
+				else
+					res_code = "";
 			}
 			key = "Content-Length:";
 			len = strlen(key);
@@ -1746,8 +1750,8 @@ request_done:
 				TF_WRITE_BEHIND)) sent = total;
 #endif
 		}
-		if (!sent) {
-			if (VERBOSE(1)) printf("transfer file using default function\n");
+		if (sent <= 0) {
+			if (VERBOSE(1)) printf("* transfer file using default function\n");
 			while(total != 0) {
 				memset(buf, 0, sizeof(buf));
 				unsigned long read = res_read(res_info, buf, sizeof(buf));
