@@ -216,6 +216,8 @@ int main(int argc, char* argv[]) {
 		if (val.size()) httpd.chroot = val;
 		val = configs["global"]["user"];
 		if (val.size()) httpd.user = val;
+		val = configs["global"]["default_cgi"];
+		if (val.size()) httpd.default_cgi = val;
 		val = configs["global"]["debug"];
 		if (val == "on") httpd.verbose_mode = 1;
 		else if (val.size()) httpd.verbose_mode = atol(val.c_str());

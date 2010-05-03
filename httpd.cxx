@@ -1326,6 +1326,11 @@ request_top:
 
 				server::MimeTypes::iterator it_mime;
 				std::string type;
+				if (!res_isfile(path) && !httpd->default_cgi.empty()) {
+					path = httpd->default_cgi;
+					if (VERBOSE(2)) printf("* running default_cgi: %s\n", path.c_str());
+				}
+
 				if (httpd->spawn_executable && res_isexe(path, path_info, script_name)) {
 					type = "@";
 				} else {

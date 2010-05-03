@@ -113,6 +113,7 @@ public:
 	std::string chroot;
 	std::string user;
 	std::string port;
+	std::string default_cgi;
 	BasicAuths basic_auths;
 	AcceptAuths accept_auths;
 	AcceptIPs accept_ips;
