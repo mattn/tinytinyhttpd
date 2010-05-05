@@ -1552,6 +1552,10 @@ request_top:
 						env = "PATH_INFO=";
 						env += path_info;
 						envs.push_back(env);
+					} else {
+						env = "PATH_INFO=";
+						env += request_uri;
+						envs.push_back(env);
 					}
 
 					env = "REDIRECT_STATUS=1";
@@ -1631,7 +1635,8 @@ request_top:
 							res_body = "Bad Request\n";
 							goto request_done;
 						}
-					}
+					} else
+						res_closewriter(res_info);
 				}
 			} else {
 				res_type = "text/plain";
