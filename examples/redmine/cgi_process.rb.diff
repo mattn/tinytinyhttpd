@@ -1,0 +1,12 @@
+--- cgi_process.rb.orig	2010-05-06 16:48:32.575821700 +0900
++++ cgi_process.rb	2010-05-06 16:48:40.591754500 +0900
+@@ -19,7 +19,8 @@
+     end
+ 
+     def self.dispatch_cgi(app, cgi, out = $stdout)
+-      env = cgi.__send__(:env_table)
++      cgi ||= CGI.new
++      env = Hash[cgi.__send__(:env_table)]
+       env.delete "HTTP_CONTENT_LENGTH"
+ 
+       cgi.stdinput.extend ProperStream
