@@ -419,7 +419,7 @@ static RES_INFO* res_fopen(std::string& file) {
 		FILE_SHARE_READ,
 		NULL,
 		OPEN_EXISTING,
-		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN,
+		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN | FILE_FLAG_OVERLAPPED,
 		NULL);
 	if (hFile == INVALID_HANDLE_VALUE)
 		return NULL;
@@ -614,11 +614,19 @@ static unsigned long res_write(RES_INFO* res_info, char* data, unsigned long siz
 	return dwWrite;
 }
 
-static unsigned long res_read(RES_INFO* res_info, char* data, unsigned long size) {
-	DWORD dwRead;
-	if (ReadFile(res_info->read, data, size, &dwRead, NULL) == FALSE)
-		return 0;
-	return dwRead;
+static long long res_read(RES_INFO* res_info, char* data, unsigned long size) {
+	DWORD dwRead = 0;
+	OVERLAPPED ovRead;
+	memset(&ovRead, 0, sizeof(ovRead));
+	if (HasOverlappedIoCompleted(&ovRead)) {
+		if (ReadFile(res_info->read, data, size, &dwRead, &ovRead) == TRUE) {
+			return dwRead;
+		}
+		DWORD dwErr = GetLastError();
+		if (dwErr != ERROR_IO_PENDING)
+			return -1;
+	}
+	return 0;
 }
 
 static RES_INFO* res_popen(std::vector<std::string>& args, std::vector<std::string>& envs) {
@@ -638,7 +646,7 @@ static RES_INFO* res_popen(std::vector<std::string>& args, std::vector<std::stri
 		return NULL;
 	}
 
-	if(!CreatePipe(&hClientIn_rd,&hClientIn_wr,NULL,0)) {
+	if(!CreatePipe(&hClientIn_rd, &hClientIn_wr, NULL, 0)) {
 		CloseHandle(hClientOut_rd);
 		CloseHandle(hClientOut_wr);
 		return NULL;
@@ -902,9 +910,19 @@ static unsigned long res_write(RES_INFO* res_info, char* data, unsigned long siz
 	return fwrite(data, 1, size, res_info->write);
 }
 
-static unsigned long res_read(RES_INFO* res_info, char* data, unsigned long size) {
-	if (feof(res_info->read)) return 0;
-	return fread(data, 1, size, res_info->read);
+static long long res_read(RES_INFO* res_info, char* data, unsigned long size) {
+	if (feof(res_info->read)) return -1;
+	int fd = fileno(res_info->read);
+	fd_set fdset;
+	FD_ZERO(&fdset);
+	FD_SET(fd, &fdset);
+	struct timeval tv;
+	tv.tv_sec = 0;
+	tv.tv_usec = 0;
+	if (select(FD_SETSIZE, &fdset, NULL, NULL, &tv) != -1 && FD_ISSET(fd, &fdset)) {
+		return fread(data, 1, size, res_info->read);
+	}
+	return 0;
 }
 
 static void res_popen_sigchild(int signo) {
@@ -1641,7 +1659,8 @@ request_top:
 #ifndef _WIN32
 						fflush((FILE*)res_info->write);
 #endif
-						res_closewriter(res_info);
+						if (stricmp(http_connection.c_str(), "upgrade"))
+							res_closewriter(res_info);
 						if (content_length) {
 							res_type = "text/plain";
 							res_code = "500";
@@ -1649,8 +1668,10 @@ request_top:
 							res_body = "Bad Request\n";
 							goto request_done;
 						}
-					} else
-						res_closewriter(res_info);
+					} else {
+						if (stricmp(http_connection.c_str(), "upgrade"))
+							res_closewriter(res_info);
+					}
 				}
 			} else {
 				res_type = "text/plain";
@@ -1777,9 +1798,9 @@ request_done:
 
 	if (res_info) {
 		send(msgsock, "\r\n", 2, 0);
-		unsigned long total = res_info->size;
+		long long total = (long long) res_info->size;
 		int sent = 0;
-		if (total != (unsigned long)-1) {
+		if (total != -1) {
 #if defined LINUX_SENDFILE_API
 			sent = sendfile(msgsock, fileno(res_info->read), NULL, total);
 #elif defined FREEBSD_SENDFILE_API
@@ -1799,11 +1820,29 @@ request_done:
 			if (VERBOSE(1)) printf("* transfer file using default function\n");
 			while(total != 0) {
 				memset(buf, 0, sizeof(buf));
-				unsigned long read = res_read(res_info, buf, sizeof(buf));
-				if (read == 0) break;
-				if (VERBOSE(3)) printf("  reading part %d bytes\n", read);
-				send(msgsock, buf, read > total ? total : read, 0);
-				total -= read;
+				int read = recv(msgsock, buf, sizeof(buf), 0);
+				if (read > 0) {
+					res_write(res_info, buf, read);
+				}
+				memset(buf, 0, sizeof(buf));
+				long long res = res_read(res_info, buf, sizeof(buf));
+				if (res < 0) break;
+				if (res > 0) {
+					if (VERBOSE(3))
+#ifdef _WIN32
+						printf("  reading part %I64d bytes\n", res);
+#else
+						printf("  reading part %lld bytes\n", res);
+#endif
+					send(msgsock, buf, res > total ? total : res, 0);
+					if (total > 0) total -= res;
+				}
+#ifdef _WIN32
+				Sleep(1);
+#else
+				usleep(100);
+#endif
+				Sleep(500);
 			}
 		}
 		res_close(res_info);
@@ -2037,14 +2076,11 @@ void* watch_thread(void* param)
 							&on, sizeof(on)) == -1)
 					fprintf(stderr, "setsockopt TCP_NODELAY: %s\n", strerror(errno));
 
-				timeout.tv_sec = 10;
+				timeout.tv_sec = 3;
 				timeout.tv_usec = 0;
 				if (setsockopt(msgsock, SOL_SOCKET, SO_SNDTIMEO,
 							(char*)&timeout, sizeof(timeout)) == -1)
 					fprintf(stderr, "setsockopt SO_SNDTIMEO: %s\n", strerror(errno));
-				if (setsockopt(msgsock, SOL_SOCKET, SO_RCVTIMEO,
-							(char*)&timeout, sizeof(timeout)) == -1)
-					fprintf(stderr, "setsockopt SO_RCVTIMEO: %s\n", strerror(errno));
 
 #if defined(_WIN32) && !defined(USE_PTHREAD)
 				uintptr_t th;
