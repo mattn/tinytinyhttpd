@@ -1837,22 +1837,6 @@ request_done:
 	else
 		send(msgsock, "\r\n", (int)2, 0);
 
-#if 0
-	fd_set fdset;
-	struct timeval timeout;
-	FD_ZERO(&fdset);
-	FD_SET(msgsock , &fdset);
-	timeout.tv_sec = 0;
-	timeout.tv_usec = 0;
-	while(select(msgsock+1, NULL, &fdset, NULL, &timeout) != 1) {
-#ifdef _WIN32
-		Sleep(100);
-#else
-		usleep(100000);
-#endif
-	}
-#endif
-
 	if (keep_alive)
 		goto request_top;
 
@@ -2009,8 +1993,6 @@ void* watch_thread(void* param)
 	for(;;) {
 		memset(fdset, 0, fdsetsz);
 
-		//timeout.tv_sec = 1;
-		//timeout.tv_usec = 0;
 		for(fds = 0; fds < nserver; fds++)
 			FD_SET(httpd->socks[fds], fdset);
 		nfds = select(maxfd + 1, fdset, NULL, NULL, NULL);
@@ -2055,7 +2037,7 @@ void* watch_thread(void* param)
 							&on, sizeof(on)) == -1)
 					fprintf(stderr, "setsockopt TCP_NODELAY: %s\n", strerror(errno));
 
-				timeout.tv_sec = 3;
+				timeout.tv_sec = 10;
 				timeout.tv_usec = 0;
 				if (setsockopt(msgsock, SOL_SOCKET, SO_SNDTIMEO,
 							(char*)&timeout, sizeof(timeout)) == -1)
