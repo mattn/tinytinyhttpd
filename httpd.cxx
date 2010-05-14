@@ -1856,7 +1856,6 @@ request_done:
 #else
 				usleep(100);
 #endif
-				Sleep(500);
 			}
 		}
 		res_close(res_info);
