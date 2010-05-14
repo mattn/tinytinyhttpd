@@ -14,7 +14,7 @@
 <script src="http://jquery-websocket.googlecode.com/files/jquery.websocket-0.0.1.js"></script>
 <script>
 $(function() {
-	var ws = new WebSocket("ws://127.0.0.1:8080/websocket.cgi");
+	var ws = new WebSocket(location.href.replace(/^http:/, 'ws:').replace(/.html$/, '.cgi'));
 	ws.onopen = function() { };
 	ws.onmessage = function(msg) {
 		if (msg.data.length) {
