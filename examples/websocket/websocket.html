@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>WebSocket Test</title>
+</head>
+<body>
+<h1>WebSocket Test</h1>
+<section id="content"></section>
+<input id="message" type="text"/><input id="post" type="button" value="post" />
+<script src="http://www.google.com/jsapi"></script>
+<script>google.load("jquery", "1.3")</script>
+<script src="http://jquery-json.googlecode.com/files/jquery.json-2.2.min.js"></script>
+<script src="http://jquery-websocket.googlecode.com/files/jquery.websocket-0.0.1.js"></script>
+<script>
+$(function() {
+	var ws = new WebSocket("ws://127.0.0.1:8080/websocket.cgi");
+	ws.onopen = function() { };
+	ws.onmessage = function(msg) {
+		var c = $('#content');
+		c.html(c.html() + msg.data + '<br />');
+	};
+	$('#post').click(function() {
+		ws.send($('#message').val());
+	});
+});
+</script>
+</body>
+</html>
