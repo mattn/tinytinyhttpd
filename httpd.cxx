@@ -1044,6 +1044,7 @@ void* response_thread(void* param)
 	std::string http_accept;
 	std::string http_user_agent;
 	std::string http_connection;
+	std::string http_upgrade;
 	std::string http_cookie;
 	std::string http_referer;
 	std::string http_authorization;
@@ -1068,6 +1069,7 @@ request_top:
 	http_user_agent.clear();
 	http_accept.clear();
 	http_connection.clear();
+	http_upgrade.clear();
 	http_cookie.clear();
 	http_authorization.clear();
 	http_referer.clear();
@@ -1095,6 +1097,12 @@ request_top:
 			http_connection = trim_string(ptr + len);
 			if (!stricmp(http_connection.c_str(), "keep-alive"))
 				keep_alive = true;
+			continue;
+		}
+		key = "upgrade:";
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_upgrade = trim_string(ptr + len);
 			continue;
 		}
 		key = "content-length:";
@@ -1510,6 +1518,12 @@ request_top:
 						envs.push_back(env);
 					}
 
+					if (!http_upgrade.empty()) {
+						env = "HTTP_UPGRADE=";
+						env += http_upgrade;
+						envs.push_back(env);
+					}
+
 					if (!http_authorization.empty()) {
 						env = "HTTP_AUTHORIZATION=";
 						env += http_authorization;
@@ -1688,6 +1702,27 @@ request_done:
 				break;
 			}
 			if (VERBOSE(2)) printf("  %s\n", ptr);
+			if (res_head.empty()) {
+				if (!strnicmp(ptr, "HTTP/1.", 7)) {
+					char* tmp1;
+					char* tmp2;
+
+					tmp1 = strchr(ptr, ' ');
+					if (tmp1) {
+						*tmp1 = 0;
+						res_proto = ptr;
+						tmp2 = strchr(tmp1 + 1, ' ');
+						if (tmp2) {
+							*tmp2 = 0;
+							res_code = tmp1 + 1;
+							res_msg = tmp2 + 1;
+						} else {
+							res_code = tmp1 + 1;
+						}
+					}
+					continue;
+				}
+			}
 			key = "connection:";
 			len = strlen(key);
 			if (!strnicmp(ptr, key, len)) {
@@ -1766,6 +1801,7 @@ request_done:
 				memset(buf, 0, sizeof(buf));
 				unsigned long read = res_read(res_info, buf, sizeof(buf));
 				if (read == 0) break;
+				if (VERBOSE(3)) printf("  reading part %d bytes\n", read);
 				send(msgsock, buf, read > total ? total : read, 0);
 				total -= read;
 			}
