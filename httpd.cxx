@@ -1063,6 +1063,7 @@ void* response_thread(void* param)
 	std::string http_user_agent;
 	std::string http_connection;
 	std::string http_upgrade;
+	std::string http_origin;
 	std::string http_cookie;
 	std::string http_referer;
 	std::string http_authorization;
@@ -1088,6 +1089,7 @@ request_top:
 	http_accept.clear();
 	http_connection.clear();
 	http_upgrade.clear();
+	http_origin.clear();
 	http_cookie.clear();
 	http_authorization.clear();
 	http_referer.clear();
@@ -1121,6 +1123,12 @@ request_top:
 		len = strlen(key);
 		if (!strnicmp(ptr, key, len)) {
 			http_upgrade = trim_string(ptr + len);
+			continue;
+		}
+		key = "origin:";
+		len = strlen(key);
+		if (!strnicmp(ptr, key, len)) {
+			http_origin = trim_string(ptr + len);
 			continue;
 		}
 		key = "content-length:";
@@ -1539,6 +1547,12 @@ request_top:
 					if (!http_upgrade.empty()) {
 						env = "HTTP_UPGRADE=";
 						env += http_upgrade;
+						envs.push_back(env);
+					}
+
+					if (!http_origin.empty()) {
+						env = "HTTP_ORIGIN=";
+						env += http_origin;
 						envs.push_back(env);
 					}
 
