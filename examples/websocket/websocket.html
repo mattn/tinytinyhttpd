@@ -17,11 +17,15 @@ $(function() {
 	var ws = new WebSocket("ws://127.0.0.1:8080/websocket.cgi");
 	ws.onopen = function() { };
 	ws.onmessage = function(msg) {
-		var c = $('#content');
-		c.html(c.html() + msg.data + '<br />');
+		if (msg.data.length) {
+			var c = $('#content');
+			c.html(c.html() + msg.data.replace(/\n/g, '') + "<br />");
+		}
 	};
 	$('#post').click(function() {
-		ws.send($('#message').val());
+		var c = $('#message');
+		ws.send(c.val() + "\n");
+		c.val('');
 	});
 });
 </script>
