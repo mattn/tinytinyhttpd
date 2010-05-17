@@ -618,14 +618,17 @@ static long long res_read(RES_INFO* res_info, char* data, unsigned long size) {
 	DWORD dwRead = 0;
 	OVERLAPPED ovRead;
 	memset(&ovRead, 0, sizeof(ovRead));
-	if (HasOverlappedIoCompleted(&ovRead)) {
-		if (ReadFile(res_info->read, data, size, &dwRead, &ovRead) == TRUE) {
-			return dwRead;
+	if (res_info->process) {
+		if (PeekNamedPipe(res_info->read, data, size, &dwRead, NULL, NULL) == TRUE && dwRead == 0) {
+			return 0;
 		}
-		DWORD dwErr = GetLastError();
-		if (dwErr != ERROR_IO_PENDING)
-			return -1;
 	}
+	if (ReadFile(res_info->read, data, size, &dwRead, &ovRead) == TRUE) {
+		return dwRead;
+	}
+	DWORD dwErr = GetLastError();
+	if (dwErr != ERROR_IO_PENDING)
+		return -1;
 	return 0;
 }
 
