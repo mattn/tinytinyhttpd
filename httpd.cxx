@@ -1511,7 +1511,11 @@ request_top:
 					envs.push_back(env);
 
 					env = "SERVER_NAME=";
-					env += httpd->hostname;
+					if (httpd->hostname.size()) {
+						env += httpd->hostname;
+					} else {
+						env += http_host;
+					}
 					envs.push_back(env);
 
 					sprintf(buf, "SERVER_PORT=%s", httpd->port.c_str());
@@ -1742,7 +1746,7 @@ request_done:
 					char* tmp1;
 					char* tmp2;
 
-					tmp1 = strchr(ptr, ' ');
+					tmp1 = (char*) strchr(ptr, ' ');
 					if (tmp1) {
 						*tmp1 = 0;
 						res_proto = ptr;
@@ -1832,11 +1836,22 @@ request_done:
 		}
 		if (sent <= 0) {
 			if (VERBOSE(1)) printf("* transfer file using default function\n");
+			int fd = msgsock;
+			fd_set fdset;
+			FD_ZERO(&fdset);
+			struct timeval tv;
+			tv.tv_sec = 0;
+			tv.tv_usec = 0;
 			while(total != 0) {
-				memset(buf, 0, sizeof(buf));
-				int read = recv(msgsock, buf, sizeof(buf), 0);
-				if (read > 0) {
-					res_write(res_info, buf, read);
+				if (res_info->write) {
+					FD_SET(fd, &fdset);
+					if (select(FD_SETSIZE, &fdset, NULL, NULL, &tv) != -1 && FD_ISSET(msgsock, &fdset)) {
+						memset(buf, 0, sizeof(buf));
+						int read = recv(msgsock, buf, sizeof(buf), 0);
+						if (read > 0) {
+							res_write(res_info, buf, read);
+						}
+					}
 				}
 				memset(buf, 0, sizeof(buf));
 				long long res = res_read(res_info, buf, sizeof(buf));
@@ -1850,12 +1865,13 @@ request_done:
 #endif
 					send(msgsock, buf, res > total ? total : res, 0);
 					if (total > 0) total -= res;
-				}
+				} else {
 #ifdef _WIN32
-				Sleep(1);
+					Sleep(1);
 #else
-				usleep(100);
+					usleep(100);
 #endif
+				}
 			}
 		}
 		res_close(res_info);
