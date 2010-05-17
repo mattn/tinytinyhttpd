@@ -2056,7 +2056,7 @@ void* watch_thread(void* param)
 	int fdsetsz = howmany(maxfd + 1, NFDBITS) * sizeof(fd_mask);
 	fd_set *fdset = (fd_set *)malloc(fdsetsz);
 
-#if 0 // http://old.nabble.com/-RFC--PATCH--don't-break-strict-aliasing-rules-td27597275.html
+#if HAVE_INET6
 	struct sockaddr_storage client;
 #else
 	char client[sizeof(sockaddr_in)];
