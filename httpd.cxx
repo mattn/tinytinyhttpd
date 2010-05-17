@@ -619,7 +619,7 @@ static long long res_read(RES_INFO* res_info, char* data, unsigned long size) {
 	OVERLAPPED ovRead;
 	memset(&ovRead, 0, sizeof(ovRead));
 	if (res_info->process) {
-		if (PeekNamedPipe(res_info->read, NULL, 0, &dwRead, NULL, NULL) == TRUE && dwRead == 0) {
+		if (PeekNamedPipe(res_info->read, NULL, 0, NULL, &dwRead, NULL) == TRUE && dwRead == 0) {
 			return 0;
 		}
 	}
