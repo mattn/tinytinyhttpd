@@ -619,7 +619,7 @@ static long long res_read(RES_INFO* res_info, char* data, unsigned long size) {
 	OVERLAPPED ovRead;
 	memset(&ovRead, 0, sizeof(ovRead));
 	if (res_info->process) {
-		if (PeekNamedPipe(res_info->read, data, size, &dwRead, NULL, NULL) == TRUE && dwRead == 0) {
+		if (PeekNamedPipe(res_info->read, NULL, 0, &dwRead, NULL, NULL) == TRUE && dwRead == 0) {
 			return 0;
 		}
 	}
@@ -1839,7 +1839,7 @@ request_done:
 		}
 		if (sent <= 0) {
 			if (VERBOSE(1)) printf("* transfer file using default function\n");
-			int fd = msgsock;
+			unsigned int fd = (unsigned int) msgsock;
 			fd_set fdset;
 			FD_ZERO(&fdset);
 			struct timeval tv;
@@ -2056,7 +2056,11 @@ void* watch_thread(void* param)
 	int fdsetsz = howmany(maxfd + 1, NFDBITS) * sizeof(fd_mask);
 	fd_set *fdset = (fd_set *)malloc(fdsetsz);
 
+#if 0 // http://old.nabble.com/-RFC--PATCH--don't-break-strict-aliasing-rules-td27597275.html
 	struct sockaddr_storage client;
+#else
+	char client[sizeof(sockaddr_in)];
+#endif
 	int client_len = sizeof(client);
 	int fds, nfds;
 	char address[NI_MAXHOST], port[NI_MAXSERV];
@@ -2089,7 +2093,7 @@ void* watch_thread(void* param)
 				break;
 			} else {
 				if (httpd->family == AF_INET) {
-					strcpy(address, inet_ntoa(((struct sockaddr_in *)&client)->sin_addr));
+					strcpy(address, inet_ntoa(((struct sockaddr_in *)(void*)&client)->sin_addr));
 				} else {
 					if (getnameinfo((struct sockaddr*)&client, client_len, address, sizeof(address), port,
 							sizeof(port), numeric_host | NI_NUMERICSERV))
