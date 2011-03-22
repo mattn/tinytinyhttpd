@@ -1406,10 +1406,11 @@ request_top:
 					//std::map<std::string, std::string> params = tthttpd::parse_querystring(query_string);
 
 					for(it = flist.begin(); it != flist.end(); it++) {
+						std::string name = it->name;
 						res_body += "<tr><td><a href=\"";
-						res_body += tthttpd::url_encode(it->name);
+						res_body += tthttpd::url_encode(name);
 						res_body += "\">";
-						res_body += it->name;
+						res_body += tthttpd::html_encode(name);
 						res_body += "</a></td>";
 						res_body += "<td>";
 						struct tm tm = it->date;
