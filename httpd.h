@@ -91,6 +91,7 @@ public:
 	typedef std::vector<std::string> AcceptIPs;
 
 	typedef void (*LoggerFunc)(const HttpdInfo* httpd_info, const std::string& request);
+	typedef std::map<std::string, std::string> HttpHeader;
 	typedef std::map<std::string, std::string> MimeTypes;
 	typedef std::vector<std::string> DefaultPages;
 	typedef std::map<std::string, std::string> RequestAliases;

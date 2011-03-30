@@ -1061,16 +1061,7 @@ void* response_thread(void* param)
 	std::string res_type;
 	std::string res_body;
 	std::string res_head;
-	std::string http_host;
-	std::string http_accept;
-	std::string http_user_agent;
-	std::string http_connection;
-	std::string http_upgrade;
-	std::string http_origin;
-	std::string http_cookie;
-	std::string http_referer;
-	std::string http_authorization;
-	std::string if_modified_since;
+	server::HttpHeader http_headers;
 	std::string content_type;
 	unsigned long content_length;
 	RES_INFO* res_info;
@@ -1087,18 +1078,9 @@ request_top:
 	res_head.clear();
 	res_body.clear();
 	res_info = NULL;
-	http_host.clear();
-	http_user_agent.clear();
-	http_accept.clear();
-	http_connection.clear();
-	http_upgrade.clear();
-	http_origin.clear();
-	http_cookie.clear();
-	http_authorization.clear();
-	http_referer.clear();
+	http_headers.clear();
 	content_type.clear();
 	content_length = 0;
-	if_modified_since.clear();
 	vauth.clear();
 
 	req = get_line(msgsock);
@@ -1114,83 +1096,29 @@ request_top:
 		size_t len;
 		if (VERBOSE(2)) printf("  %s\n", ptr);
 
-		key = "connection:";
-		len = strlen(key);
-		if (!strnicmp(ptr, key, len)) {
-			http_connection = trim_string(ptr + len);
-			if (!stricmp(http_connection.c_str(), "keep-alive"))
-				keep_alive = true;
-			continue;
-		}
-		key = "upgrade:";
-		len = strlen(key);
-		if (!strnicmp(ptr, key, len)) {
-			http_upgrade = trim_string(ptr + len);
-			continue;
-		}
-		key = "origin:";
-		len = strlen(key);
-		if (!strnicmp(ptr, key, len)) {
-			http_origin = trim_string(ptr + len);
-			continue;
-		}
 		key = "content-length:";
 		len = strlen(key);
 		if (!strnicmp(ptr, key, len)) {
 			content_length = atol(ptr + len);
 			continue;
 		}
-		key = "user-agent:";
-		len = strlen(key);
-		if (!strnicmp(ptr, key, len)) {
-			http_user_agent = trim_string(ptr + len);
+		if (!strnicmp(ptr, "SERVER_", 7) || !strnicmp(ptr, "REMOTE_", 7)) {
 			continue;
 		}
-		key = "accept:";
-		len = strlen(key);
-		if (!strnicmp(ptr, key, len)) {
-			http_accept = trim_string(ptr + len);
-			continue;
-		}
-		key = "cookie:";
-		len = strlen(key);
-		if (!strnicmp(ptr, key, len)) {
-			http_cookie = trim_string(ptr + len);
-			continue;
-		}
-		key = "if-modified-since:";
-		len = strlen(key);
-		if (!strnicmp(ptr, key, len)) {
-			if_modified_since = trim_string(ptr + len);
-			continue;
-		}
-		key = "content-type:";
-		len = strlen(key);
-		if (!strnicmp(ptr, key, len)) {
-			content_type = trim_string(ptr + len);
-			continue;
-		}
-		key = "authorization:";
-		len = strlen(key);
-		if (!strnicmp(ptr, key, len)) {
-			http_authorization = trim_string(ptr + len);
-			continue;
-		}
-		key = "referer:";
-		len = strlen(key);
-		if (!strnicmp(ptr, key, len)) {
-			http_referer = trim_string(ptr + len);
-			continue;
-		}
-		key = "host:";
-		len = strlen(key);
-		if (!strnicmp(ptr, key, len)) {
-			char* stp = (char*)strchr(ptr + len, ':');
-			if (stp) *stp = 0;
-			http_host = trim_string(ptr + len);
-			continue;
+		char* stp = (char*)strchr(ptr, ':');
+		if (stp) {
+			*stp = 0;
+			std::string key = ptr;
+			std::transform(key.begin(), key.end(), key.begin(), toupper);
+			std::string val = trim_string(stp + 1);
+			replace_string(key, "-", "_");
+			std::transform(key.begin(), key.end(), key.begin(), toupper);
+			http_headers[key] = val;
 		}
 	} while (true);
+
+	if (!stricmp(http_headers["CONNECTION"].c_str(), "keep-alive"))
+		keep_alive = true;
 
 	if (httpd->loggerfunc) {
 		httpd->loggerfunc(pHttpdInfo, req);
@@ -1215,11 +1143,11 @@ request_top:
 				res_proto = "HTTP/1.0";
 			else
 				res_proto = vparam[2];
-			std::string auth_basic;
-			if (http_authorization.size()) {
-				if (!strnicmp(http_authorization.c_str(), "basic ", 6))
-					auth_basic = base64_decode(http_authorization.c_str()+6);
-				split_string(auth_basic, ":", vauth);
+			std::string auth = http_headers["AUTHORIZATION"];
+			if (!auth.empty()) {
+				if (!strnicmp(auth.c_str(), "basic ", 6))
+					auth = base64_decode(auth.c_str()+6);
+				split_string(auth, ":", vauth);
 			}
 			if (vparam[0] == "GET" || vparam[0] == "POST" || vparam[0] == "HEAD") {
 				std::string root = server::get_realpath(httpd->root + "/");
@@ -1455,7 +1383,7 @@ request_top:
 					std::string file_time = res_ftime(path);
 					res_info->size = res_fsize(res_info);
 					sprintf(buf, "%d", (int)res_info->size);
-					if (if_modified_since.size() && if_modified_since == file_time) {
+					if (http_headers["IF_MODIFIED_SINCE"] == file_time) {
 						res_close(res_info);
 						res_info = NULL;
 						res_type = "text/plain";
@@ -1476,8 +1404,8 @@ request_top:
 					res_head += "Date: ";
 					res_head += res_curtime();
 					res_head += "\r\n";
-					if (keep_alive)
-						res_head += "Connection: keep-alive\r\n";
+					if (http_headers.count("CONNECTION"))
+						res_head += "Connection: " + http_headers["CONNECTION"] + "\r\n";
 				} else {
 					res_close(res_info);
 					res_info = NULL;
@@ -1496,16 +1424,25 @@ request_top:
 
 					std::string env;
 
-					if (http_host.size()) {
-						sprintf(buf, "HTTP_HOST=%s:%s", http_host.c_str(), httpd->port.c_str());
+					if (http_headers.count("HTTP_HOST")) {
+						sprintf(buf, "HTTP_HOST=%s:%s", http_headers["HTTP_HOST"].c_str(), httpd->port.c_str());
 						env = buf;
 						envs.push_back(env);
+						http_headers.erase("HTTP_HOST");
 					} else
 					if (httpd->hostname.size()) {
 						sprintf(buf, "HTTP_HOST=%s:%s", httpd->hostname.c_str(), httpd->port.c_str());
 						env = buf;
 						envs.push_back(env);
+						http_headers.erase("HTTP_HOST");
 					}
+
+					http_headers.erase("SERVER_PROTOCOL");
+					http_headers.erase("SERVER_ADDR");
+					http_headers.erase("SERVER_NAME");
+					http_headers.erase("REMOTE_ADDR");
+					http_headers.erase("REMOTE_PORT");
+					http_headers.erase("REMOTE_USER");
 
 					env = "SERVER_PROTOCOL=HTTP/1.1";
 					envs.push_back(env);
@@ -1518,7 +1455,7 @@ request_top:
 					if (httpd->hostname.size()) {
 						env += httpd->hostname;
 					} else {
-						env += http_host;
+						env += http_headers["HTTP_HOST"];
 					}
 					envs.push_back(env);
 
@@ -1534,51 +1471,18 @@ request_top:
 					env = buf;
 					envs.push_back(env);
 
-					if (!http_authorization.empty()) {
+					if (vauth.size() && !vauth[0].empty()) {
 						env = "REMOTE_USER=";
 						env += vauth[0];
 						envs.push_back(env);
 					}
 
-					if (!http_user_agent.empty()) {
-						env = "HTTP_USER_AGENT=";
-						env += http_user_agent;
-						envs.push_back(env);
-					}
-
-					if (!http_connection.empty()) {
-						env = "HTTP_CONNECTION=";
-						env += http_connection;
-						envs.push_back(env);
-					}
-
-					if (!http_upgrade.empty()) {
-						env = "HTTP_UPGRADE=";
-						env += http_upgrade;
-						envs.push_back(env);
-					}
-
-					if (!http_origin.empty()) {
-						env = "HTTP_ORIGIN=";
-						env += http_origin;
-						envs.push_back(env);
-					}
-
-					if (!http_authorization.empty()) {
-						env = "HTTP_AUTHORIZATION=";
-						env += http_authorization;
-						envs.push_back(env);
-					}
-
-					if (!http_cookie.empty()) {
-						env = "HTTP_COOKIE=";
-						env += http_cookie;
-						envs.push_back(env);
-					}
-
-					if (!http_referer.empty()) {
-						env = "HTTP_REFERER=";
-						env += http_referer;
+					server::HttpHeader::const_iterator it_head;
+					for (it_head = http_headers.begin(); it_head != http_headers.end(); it_head++) {
+						env = "HTTP_";
+						env += it_head->first;
+						env += "=";
+						env += it_head->second;
 						envs.push_back(env);
 					}
 
@@ -1617,10 +1521,6 @@ request_top:
 
 					env = "PATH=";
 					env += getenv("PATH");
-					envs.push_back(env);
-
-					env = "HTTP_ACCEPT=";
-					env += http_accept;
 					envs.push_back(env);
 
 #ifdef _WIN32
@@ -1681,7 +1581,7 @@ request_top:
 #ifndef _WIN32
 						fflush((FILE*)res_info->write);
 #endif
-						if (stricmp(http_connection.c_str(), "upgrade"))
+						if (!stricmp(http_headers["CONNECTION"].c_str(), "close"))
 							res_closewriter(res_info);
 						if (content_length) {
 							res_type = "text/plain";
@@ -1691,7 +1591,7 @@ request_top:
 							goto request_done;
 						}
 					} else {
-						if (stricmp(http_connection.c_str(), "upgrade"))
+						if (!stricmp(http_headers["CONNECTION"].c_str(), "close"))
 							res_closewriter(res_info);
 					}
 				}
@@ -1769,8 +1669,7 @@ request_done:
 			key = "connection:";
 			len = strlen(key);
 			if (!strnicmp(ptr, key, len)) {
-				http_connection = trim_string(ptr + len);
-				if (!stricmp(http_connection.c_str(), "keep-alive"))
+				if (!stricmp(trim_string(ptr + len).c_str(), "keep-alive"))
 					res_keep_alive = true;
 			}
 			key = "WWW-Authenticate: Basic ";
@@ -1799,13 +1698,13 @@ request_done:
 		} while (true);
 		if (!res_keep_alive) {
 			keep_alive = false;
-			if (http_connection.empty()) {
-				res_head += "Connection: closed\r\n";
+			if (http_headers.count("CONNECTION")) {
+				res_head += "Connection: close\r\n";
 			}
 		}
 	}
 
-	if (res_code.size()) {
+	if (!res_code.empty()) {
 		send(msgsock, res_proto.c_str(), (int)res_proto.size(), 0);
 		send(msgsock, " ", 1, 0);
 		send(msgsock, res_code.c_str(), (int)res_code.size(), 0);
@@ -1814,7 +1713,7 @@ request_done:
 		send(msgsock, "\r\n", 2, 0);
 	}
 
-	if (res_head.size()) {
+	if (!res_head.empty()) {
 		send(msgsock, res_head.c_str(), (int)res_head.size(), 0);
 	}
 
@@ -1881,7 +1780,7 @@ request_done:
 		res_close(res_info);
 		res_info = NULL;
 	} else
-	if (res_body.size()) {
+	if (!res_body.empty()) {
 		if (keep_alive)
 			ret = "Connection: keep-alive\r\n";
 		else
@@ -1933,7 +1832,7 @@ void* watch_thread(void* param)
 	int numeric_host = 0;
 
 	// privsep?
-	if (httpd->chroot.size() != 0) {
+	if (!httpd->chroot.empty()) {
 		numeric_host = NI_NUMERICHOST;
 	}
 
@@ -1958,7 +1857,7 @@ void* watch_thread(void* param)
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if (httpd->hostname.size() == 0)
+	if (httpd->hostname.empty() == 0)
 		hostname = NULL;
 	else
 		hostname = httpd->hostname.c_str();
