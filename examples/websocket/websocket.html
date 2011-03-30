@@ -7,24 +7,30 @@
 <body>
 <h1>WebSocket Test</h1>
 <section id="content"></section>
-<input id="message" type="text"/><input id="post" type="button" value="post" />
+<input id="message" class="input" type="text"/><input id="post" class="input" type="button" value="post" />
 <script src="http://www.google.com/jsapi"></script>
 <script>google.load("jquery", "1.3")</script>
 <script>
 $(function() {
+	$('.input').attr('disabled', 'disabled')
 	var ws = new WebSocket(location.href.replace(/^http:/, 'ws:').replace(/.html$/, '.cgi'));
-	ws.onopen = function() { };
-	ws.onmessage = function(msg) {
-		if (msg.data.length) {
-			var c = $('#content');
-			c.html(c.html() + msg.data.replace(/\n/g, '') + "<br />");
-		}
+	ws.onerror = function() { alert('err'); ws.close(); }
+	ws.onclose = function() { alert('close'); $('.input').attr('disabled', 'disabled') }
+	ws.onopen = function() {
+		$('.input').removeAttr('disabled');
+		ws.onmessage = function(msg) {
+			if (msg.data.length) {
+				var c = $('#content');
+				c.html(c.html() + msg.data.replace(/\n/g, '') + "<br />");
+			}
+		};
+		$('#post').click(function() {
+			var c = $('#message');
+			ws.send(c.val() + "\n");
+			c.val('');
+		});
 	};
-	$('#post').click(function() {
-		var c = $('#message');
-		ws.send(c.val() + "\n");
-		c.val('');
-	});
+	ws.send("hi");
 });
 </script>
 </body>
