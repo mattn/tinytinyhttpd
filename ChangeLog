@@ -1,3 +1,8 @@
+2011-03-30: version 0.0.10
+
+	* encode filename in directory listing.
+	* support websocket version 76.
+
 2009-10-05: version 0.0.9
 
 	* IPv6 support.
