@@ -1581,7 +1581,7 @@ request_top:
 #ifndef _WIN32
 						fflush((FILE*)res_info->write);
 #endif
-						if (!stricmp(http_headers["CONNECTION"].c_str(), "upgrade"))
+						if (stricmp(http_headers["CONNECTION"].c_str(), "upgrade"))
 							res_closewriter(res_info);
 						if (content_length) {
 							res_type = "text/plain";
@@ -1591,7 +1591,7 @@ request_top:
 							goto request_done;
 						}
 					} else {
-						if (!stricmp(http_headers["CONNECTION"].c_str(), "upgrade"))
+						if (stricmp(http_headers["CONNECTION"].c_str(), "upgrade"))
 							res_closewriter(res_info);
 					}
 				}
@@ -1748,7 +1748,9 @@ request_done:
 			while(total != 0) {
 				if (res_info->write) {
 					FD_SET(fd, &fdset);
-					if (select(FD_SETSIZE, &fdset, NULL, NULL, &tv) != -1 && FD_ISSET(msgsock, &fdset)) {
+					int r = select(FD_SETSIZE, &fdset, NULL, NULL, &tv);
+					if (r == -1) break;
+					if (r >= 0 && FD_ISSET(msgsock, &fdset)) {
 						memset(buf, 0, sizeof(buf));
 						int read = recv(msgsock, buf, sizeof(buf), 0);
 						if (read > 0) {
