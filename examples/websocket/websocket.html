@@ -2,10 +2,14 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>WebSocket Test</title>
+<title>WebSocket Chat</title>
+<style>
+.time { color: green }
+.message { color: blue; font-weight: bold }
+</style>
 </head>
 <body>
-<h1>WebSocket Test</h1>
+<h1>WebSocket Chat</h1>
 <section id="content"></section>
 <input id="message" class="input" type="text"/><input id="post" class="input" type="button" value="post" />
 <script src="http://www.google.com/jsapi"></script>
@@ -14,19 +18,26 @@
 $(function() {
 	$('.input').attr('disabled', 'disabled')
 	var ws = new WebSocket(location.href.replace(/^http:/, 'ws:').replace(/.html$/, '.cgi'));
-	ws.onerror = function() { alert('err'); ws.close(); }
-	ws.onclose = function() { alert('close'); $('.input').attr('disabled', 'disabled') }
+	ws.onerror = function() { ws.close(); }
+	ws.onclose = function() { $('.input').attr('disabled', 'disabled') }
 	ws.onopen = function() {
 		$('.input').removeAttr('disabled');
 		ws.onmessage = function(msg) {
 			if (msg.data.length) {
-				var c = $('#content');
-				c.html(c.html() + msg.data.replace(/\n/g, '') + "<br />");
+				var data = JSON.parse(msg.data);
+				$('#content')
+					.append($('<span/>').text(data.time).addClass('time'))
+					.append(": ")
+					.append($('<span/>').text(data.message).addClass('message'))
+					.append("<br />");
 			}
-		};
+		}
+		$('#message').keydown(function(e) {
+			if (e.keyCode == 13) $('#post').click();
+		});
 		$('#post').click(function() {
 			var c = $('#message');
-			ws.send(c.val() + "\n");
+			ws.send(c.val());
 			c.val('');
 		});
 	};
