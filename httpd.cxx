@@ -1581,7 +1581,7 @@ request_top:
 #ifndef _WIN32
 						fflush((FILE*)res_info->write);
 #endif
-						if (!stricmp(http_headers["CONNECTION"].c_str(), "close"))
+						if (!stricmp(http_headers["CONNECTION"].c_str(), "upgrade"))
 							res_closewriter(res_info);
 						if (content_length) {
 							res_type = "text/plain";
@@ -1591,7 +1591,7 @@ request_top:
 							goto request_done;
 						}
 					} else {
-						if (!stricmp(http_headers["CONNECTION"].c_str(), "close"))
+						if (!stricmp(http_headers["CONNECTION"].c_str(), "upgrade"))
 							res_closewriter(res_info);
 					}
 				}
