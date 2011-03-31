@@ -1859,7 +1859,7 @@ void* watch_thread(void* param)
 	hints.ai_flags = AI_PASSIVE;
 	hints.ai_socktype = SOCK_STREAM;
 
-	if (httpd->hostname.empty() == 0)
+	if (httpd->hostname.empty())
 		hostname = NULL;
 	else
 		hostname = httpd->hostname.c_str();
