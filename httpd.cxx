@@ -1533,9 +1533,12 @@ request_top:
 					envs.push_back(env);
 #endif
 
-					env = "PERL5LIB=";
-					env += getenv("PERL5LIB");
-					envs.push_back(env);
+					char* p = getenv("PERL5LIB");
+					if (p) {
+						env = "PERL5LIB=";
+						env += p;
+						envs.push_back(env);
+					}
 
 					env = "SERVER_SOFTWARE=tinytinyhttpd";
 					envs.push_back(env);
