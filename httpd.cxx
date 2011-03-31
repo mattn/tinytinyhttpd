@@ -913,20 +913,24 @@ static unsigned long res_write(RES_INFO* res_info, char* data, unsigned long siz
 }
 
 static long long res_read(RES_INFO* res_info, char* data, unsigned long size) {
-	fd_set fdset;
-	FD_ZERO(&fdset);
-	FD_SET(res_info->read, &fdset);
 	if (res_info->process) {
 		int s = 0;
 		if (waitpid(res_info->process, &s, WNOHANG) == -1) {
 			return -1;
 		}
 	}
-	int r = select(FD_SETSIZE, &fdset, NULL, NULL, NULL);
-	if (r != -1 && FD_ISSET(res_info->read, &fdset)) {
+	fd_set fdset;
+	FD_ZERO(&fdset);
+	FD_SET(res_info->read, &fdset);
+	struct timeval tv;
+	tv.tv_sec = 0;
+	tv.tv_usec = 0;
+	int r = select(FD_SETSIZE, &fdset, NULL, NULL, &tv);
+	if (r == -1) return -1;
+	if (FD_ISSET(res_info->read, &fdset)) {
 		return (long long) read(res_info->read, data, size);
 	}
-	return -1;
+	return 0;
 }
 
 static void res_popen_sigchild(int signo) {
