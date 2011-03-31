@@ -923,7 +923,7 @@ static long long res_read(RES_INFO* res_info, char* data, unsigned long size) {
 	tv.tv_sec = 0;
 	tv.tv_usec = 0;
 	if (select(FD_SETSIZE, &fdset, NULL, NULL, &tv) != -1 && FD_ISSET(fd, &fdset)) {
-		return fread(data, 1, size, res_info->read);
+		return (long long) read(fd, data, size);
 	}
 	return 0;
 }
@@ -1530,6 +1530,10 @@ request_top:
 					envs.push_back(env);
 #endif
 
+					env = "PERL5LIB=";
+					env += getenv("PERL5LIB");
+					envs.push_back(env);
+
 					env = "SERVER_SOFTWARE=tinytinyhttpd";
 					envs.push_back(env);
 
@@ -1719,9 +1723,9 @@ request_done:
 
 	if (res_info) {
 		send(msgsock, "\r\n", 2, 0);
-		long long total = (long long) res_info->size;
+		unsigned long total = res_info->size;
 		int sent = 0;
-		if (total != -1) {
+		if (total != (unsigned long) -1) {
 #if defined LINUX_SENDFILE_API
 			sent = sendfile(msgsock, fileno(res_info->read), NULL, total);
 #elif defined FREEBSD_SENDFILE_API
@@ -1750,11 +1754,14 @@ request_done:
 					FD_SET(fd, &fdset);
 					int r = select(FD_SETSIZE, &fdset, NULL, NULL, &tv);
 					if (r == -1) break;
-					if (r >= 0 && FD_ISSET(msgsock, &fdset)) {
+					if (r > 0 && FD_ISSET(msgsock, &fdset)) {
 						memset(buf, 0, sizeof(buf));
 						int read = recv(msgsock, buf, sizeof(buf), 0);
 						if (read > 0) {
 							res_write(res_info, buf, read);
+#ifndef _WIN32
+							fflush((FILE*)res_info->write);
+#endif
 						}
 					}
 				}
@@ -1768,8 +1775,10 @@ request_done:
 #else
 						printf("  reading part %lld bytes\n", res);
 #endif
-					send(msgsock, buf, res > total ? total : res, 0);
-					if (total > 0) total -= res;
+					send(msgsock, buf, res, 0);
+					if (total > 0) {
+						total -= res;
+					}
 				} else {
 #ifdef _WIN32
 					Sleep(1);
