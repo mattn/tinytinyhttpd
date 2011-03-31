@@ -316,8 +316,8 @@ typedef struct {
 	HANDLE write;
 	HANDLE process;
 #else
-	FILE* read;
-	FILE* write;
+	int read;
+	int write;
 	pid_t process;
 #endif
 	unsigned long size;
@@ -758,12 +758,12 @@ static void res_close(RES_INFO* res_info) {
 }
 #else
 static RES_INFO* res_fopen(std::string& file) {
-	FILE* fp = fopen(file.c_str(), "rb");
-	if (!fp)
+	int fd = open(file.c_str(), O_RDONLY);
+	if (fd < 0)
 		return NULL;
 
 	RES_INFO* res_info = new RES_INFO;
-	res_info->read = fp;
+	res_info->read = fd;
 	res_info->write = 0;
 	res_info->process = 0;
 	res_info->size = (unsigned long)-1;
@@ -863,7 +863,7 @@ static std::vector<server::ListInfo> res_flist(std::string& path) {
 
 static unsigned long res_fsize(RES_INFO* res_info) {
 	struct stat statbuf = {0};
-	fstat(fileno(res_info->read), &statbuf);
+	fstat(res_info->read, &statbuf);
 	return statbuf.st_size;
 }
 
@@ -899,33 +899,34 @@ static std::string res_ftime(std::string& file, int diff = 0) {
 
 static std::string res_fgets(RES_INFO* res_info) {
 	std::string ret;
-	char buf[BUFSIZ], *ptr;
-	memset(buf, 0, sizeof(buf));
-	if (fgets(buf, sizeof(buf), res_info->read)) {
-		ptr = strpbrk(buf, "\r\n");
-		if (ptr) *ptr = 0;
-		ret = buf;
+	while(true) {
+		char buf[2] = {0};
+		if (read(res_info->read, buf, 1) != 1) break;
+		if (buf[0] == '\n') break;
+		if (buf[0] != '\r') ret += buf;
 	}
 	return ret;
 }
 
 static unsigned long res_write(RES_INFO* res_info, char* data, unsigned long size) {
-	return fwrite(data, 1, size, res_info->write);
+	return write(res_info->write, data, size);
 }
 
 static long long res_read(RES_INFO* res_info, char* data, unsigned long size) {
-	if (feof(res_info->read)) return -1;
-	int fd = fileno(res_info->read);
 	fd_set fdset;
 	FD_ZERO(&fdset);
-	FD_SET(fd, &fdset);
-	struct timeval tv;
-	tv.tv_sec = 0;
-	tv.tv_usec = 0;
-	if (select(FD_SETSIZE, &fdset, NULL, NULL, &tv) != -1 && FD_ISSET(fd, &fdset)) {
-		return (long long) read(fd, data, size);
+	FD_SET(res_info->read, &fdset);
+	if (res_info->process) {
+		int s = 0;
+		if (waitpid(res_info->process, &s, WNOHANG) == -1) {
+			return -1;
+		}
 	}
-	return 0;
+	int r = select(FD_SETSIZE, &fdset, NULL, NULL, NULL);
+	if (r != -1 && FD_ISSET(res_info->read, &fdset)) {
+		return (long long) read(res_info->read, data, size);
+	}
+	return -1;
 }
 
 static void res_popen_sigchild(int signo) {
@@ -999,8 +1000,8 @@ static RES_INFO* res_popen(std::vector<std::string>& args, std::vector<std::stri
 		fcntl(filedesw[1], F_SETFL, flags);
 
 		RES_INFO* res_info = new RES_INFO;
-		res_info->read = fdopen(filedesr[0], "r");
-		res_info->write = fdopen(filedesw[1], "w");
+		res_info->read = filedesr[0];
+		res_info->write = filedesw[1];
 		res_info->process = child;
 		res_info->size = (unsigned long)-1;
 		return res_info;
@@ -1010,15 +1011,15 @@ static RES_INFO* res_popen(std::vector<std::string>& args, std::vector<std::stri
 
 static void res_closewriter(RES_INFO* res_info) {
 	if (res_info && res_info->write) {
-		fclose(res_info->write);
+		close(res_info->write);
 		res_info->write = NULL;
 	}
 }
 
 static void res_close(RES_INFO* res_info) {
 	if (res_info) {
-		if (res_info->read) fclose(res_info->read);
-		if (res_info->write) fclose(res_info->write);
+		if (res_info->read) close(res_info->read);
+		if (res_info->write) close(res_info->write);
 		delete res_info;
 	}
 }
@@ -1062,7 +1063,6 @@ void* response_thread(void* param)
 	std::string res_body;
 	std::string res_head;
 	server::HttpHeader http_headers;
-	std::string content_type;
 	unsigned long content_length;
 	RES_INFO* res_info;
 	char buf[BUFSIZ];
@@ -1079,7 +1079,6 @@ request_top:
 	res_body.clear();
 	res_info = NULL;
 	http_headers.clear();
-	content_type.clear();
 	content_length = 0;
 	vauth.clear();
 
@@ -1552,7 +1551,7 @@ request_top:
 
 					if (vparam[0] == "POST") {
 						env = "CONTENT_TYPE=";
-						env += content_type;
+						env += http_headers["CONTENT_TYPE"];
 						envs.push_back(env);
 
 						sprintf(buf, "%d", (int)content_length);
@@ -1579,12 +1578,10 @@ request_top:
 							memset(buf, 0, sizeof(buf));
 							unsigned long read = recv(msgsock, buf, sizeof(buf), 0);
 							if (read <= 0) break;
-							res_write(res_info, buf, read);
-							content_length -= read;
+							int w = res_write(res_info, buf, read);
+							content_length -= w;
 						}
-#ifndef _WIN32
-						fflush((FILE*)res_info->write);
-#endif
+
 						if (stricmp(http_headers["CONNECTION"].c_str(), "upgrade"))
 							res_closewriter(res_info);
 						if (content_length) {
@@ -1702,9 +1699,7 @@ request_done:
 		} while (true);
 		if (!res_keep_alive) {
 			keep_alive = false;
-			if (http_headers.count("CONNECTION")) {
-				res_head += "Connection: close\r\n";
-			}
+			res_head += "Connection: close\r\n";
 		}
 	}
 
@@ -1727,9 +1722,9 @@ request_done:
 		int sent = 0;
 		if (total != (unsigned long) -1) {
 #if defined LINUX_SENDFILE_API
-			sent = sendfile(msgsock, fileno(res_info->read), NULL, total);
+			sent = sendfile(msgsock, res_info->read, NULL, total);
 #elif defined FREEBSD_SENDFILE_API
-			if (sendfile(msgsock, fileno(res_info->read), NULL, total, NULL, NULL, 0) == 0) sent = total;
+			if (sendfile(msgsock, res_info->read, NULL, total, NULL, NULL, 0) == 0) sent = total;
 #elif defined _WIN32
 			if (!res_info->process && lpfnTransmitFile && lpfnTransmitFile(
 				msgsock,
@@ -1753,15 +1748,12 @@ request_done:
 				if (res_info->write) {
 					FD_SET(fd, &fdset);
 					int r = select(FD_SETSIZE, &fdset, NULL, NULL, &tv);
-					if (r == -1) break;
+					if (r < 0) break;
 					if (r > 0 && FD_ISSET(msgsock, &fdset)) {
 						memset(buf, 0, sizeof(buf));
 						int read = recv(msgsock, buf, sizeof(buf), 0);
 						if (read > 0) {
 							res_write(res_info, buf, read);
-#ifndef _WIN32
-							fflush((FILE*)res_info->write);
-#endif
 						}
 					}
 				}
