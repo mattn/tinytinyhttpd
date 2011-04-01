@@ -2,10 +2,10 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.60)
-AC_INIT(tinytinyhttpd, 0.0.10, mattn.jp@gmail.com)
+AC_INIT(tinytinyhttpd, 0.0.11, mattn.jp@gmail.com)
 AC_CONFIG_SRCDIR([httpd.cxx])
 AC_CONFIG_HEADER([config.h])
-AM_INIT_AUTOMAKE(tinytinyhttpd, 0.0.10, no-define) 
+AM_INIT_AUTOMAKE(tinytinyhttpd, 0.0.11, no-define) 
 
 # Checks for programs.
 AC_PROG_CXX

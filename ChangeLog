@@ -1,3 +1,9 @@
+2011-04-01: version 0.0.11
+
+	* fix websocket.
+	* add example for windows scripting host.
+	* fix usage with -?.
+
 2011-03-30: version 0.0.10
 
 	* encode filename in directory listing.
