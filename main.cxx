@@ -136,11 +136,12 @@ int main(int argc, char* argv[]) {
 #ifdef PACKAGE_VERSION
 		case 'V':
 			printf("%s\n", PACKAGE_VERSION);
-			break;
+			argc = 0;
+			return -1;
 #endif
 		case 'x': spawn_exec = true; break;
 		case 'h': argc = 0; break;
-		case '?': break;
+		case '?': argc = 0; break;
 		default: argc = 0; break;
 		}
 		optarg = NULL;
