@@ -252,10 +252,10 @@ int main(int argc, char* argv[]) {
 
   } else {
 #ifdef _WIN32
-    httpd.mime_types["cgi"] = "@c:/strawberry/perl/bin/perl.exe";
-    httpd.mime_types["php"] = "@c:/progra~1/php/php-cgi.exe";
-    httpd.mime_types["rb"] = "@c:/ruby/bin/ruby.exe";
-    httpd.mime_types["py"] = "@c:/python25/python.exe";
+    httpd.mime_types["cgi"] = "@perl";
+    httpd.mime_types["php"] = "@php-cgi";
+    httpd.mime_types["rb"] = "@ruby";
+    httpd.mime_types["py"] = "@python";
 #else
     httpd.mime_types["cgi"] = "@/usr/bin/perl";
     httpd.mime_types["php"] = "@/usr/bin/php-cgi";
