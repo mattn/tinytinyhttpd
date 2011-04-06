@@ -1120,7 +1120,8 @@ request_top:
     }
   } while (true);
 
-  if (!stricmp(http_headers["CONNECTION"].c_str(), "keep-alive"))
+  if (http_headers.count("CONNECTION")
+      && !stricmp(http_headers["CONNECTION"].c_str(), "keep-alive"))
     keep_alive = true;
 
   if (httpd->loggerfunc) {
@@ -1395,9 +1396,11 @@ request_top:
             res_body.clear();
             goto request_done;
           }
-          res_head += "Content-Type: ";
-          res_head += type;
-          res_head += ";\r\n";
+          if (!type.empty()) {
+            res_head += "Content-Type: ";
+            res_head += type;
+            res_head += ";\r\n";
+          }
           res_head += "Content-Length: ";
           res_head += buf;
           res_head += "\r\n";
