@@ -218,3 +218,5 @@ public:
 }
 
 #endif /* _HTTPD_H_ */
+
+// vim:set et:

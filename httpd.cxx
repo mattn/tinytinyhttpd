@@ -2102,3 +2102,5 @@ bool server::is_running() {
 }
 
 }
+
+// vim:set et:

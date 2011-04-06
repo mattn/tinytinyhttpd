@@ -1333,3 +1333,5 @@ void set_priv(const char *chuser_name, const char *chroot_dir, const char *title
 }
 
 }
+
+// vim:set et:

@@ -132,3 +132,5 @@ void set_priv(const char *, const char *, const char *);
 }
 
 #endif /* _UTILS_H_ */
+
+// vim:set et:
