@@ -48,13 +48,13 @@
 namespace tthttpd {
 
 const std::string base64_chars =
-	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	"abcdefghijklmnopqrstuvwxyz"
-	"0123456789+/";
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  "abcdefghijklmnopqrstuvwxyz"
+  "0123456789+/";
 #define is_base64(c) ( \
-		isalnum((unsigned char)c) || \
-		((unsigned char)c == '+') || \
-		((unsigned char)c == '/'))
+    isalnum((unsigned char)c) || \
+    ((unsigned char)c == '+') || \
+    ((unsigned char)c == '/'))
 
 struct interval {
   unsigned short first;
@@ -76,81 +76,81 @@ static char utf8len_tab[256] =
 
 int utf_bytes2char(unsigned char* p)
 {
-	int		len;
+  int    len;
 
-	if (p[0] < 0x80)	/* be quick for ASCII */
-		return p[0];
+  if (p[0] < 0x80)  /* be quick for ASCII */
+    return p[0];
 
-	len = utf8len_tab[p[0]];
-	if ((p[1] & 0xc0) == 0x80) {
-		if (len == 2)
-			return ((p[0] & 0x1f) << 6) + (p[1] & 0x3f);
-		if ((p[2] & 0xc0) == 0x80) {
-			if (len == 3)
-				return ((p[0] & 0x0f) << 12) + ((p[1] & 0x3f) << 6)
-					+ (p[2] & 0x3f);
-			if ((p[3] & 0xc0) == 0x80) {
-				if (len == 4)
-					return ((p[0] & 0x07) << 18) + ((p[1] & 0x3f) << 12)
-						+ ((p[2] & 0x3f) << 6) + (p[3] & 0x3f);
-				if ((p[4] & 0xc0) == 0x80) {
-					if (len == 5)
-						return ((p[0] & 0x03) << 24) + ((p[1] & 0x3f) << 18)
-							+ ((p[2] & 0x3f) << 12) + ((p[3] & 0x3f) << 6)
-							+ (p[4] & 0x3f);
-					if ((p[5] & 0xc0) == 0x80 && len == 6)
-						return ((p[0] & 0x01) << 30) + ((p[1] & 0x3f) << 24)
-							+ ((p[2] & 0x3f) << 18) + ((p[3] & 0x3f) << 12)
-							+ ((p[4] & 0x3f) << 6) + (p[5] & 0x3f);
-				}
-			}
-		}
-	}
-	/* Illegal value, just return the first byte */
-	return p[0];
+  len = utf8len_tab[p[0]];
+  if ((p[1] & 0xc0) == 0x80) {
+    if (len == 2)
+      return ((p[0] & 0x1f) << 6) + (p[1] & 0x3f);
+    if ((p[2] & 0xc0) == 0x80) {
+      if (len == 3)
+        return ((p[0] & 0x0f) << 12) + ((p[1] & 0x3f) << 6)
+          + (p[2] & 0x3f);
+      if ((p[3] & 0xc0) == 0x80) {
+        if (len == 4)
+          return ((p[0] & 0x07) << 18) + ((p[1] & 0x3f) << 12)
+            + ((p[2] & 0x3f) << 6) + (p[3] & 0x3f);
+        if ((p[4] & 0xc0) == 0x80) {
+          if (len == 5)
+            return ((p[0] & 0x03) << 24) + ((p[1] & 0x3f) << 18)
+              + ((p[2] & 0x3f) << 12) + ((p[3] & 0x3f) << 6)
+              + (p[4] & 0x3f);
+          if ((p[5] & 0xc0) == 0x80 && len == 6)
+            return ((p[0] & 0x01) << 30) + ((p[1] & 0x3f) << 24)
+              + ((p[2] & 0x3f) << 18) + ((p[3] & 0x3f) << 12)
+              + ((p[4] & 0x3f) << 6) + (p[5] & 0x3f);
+        }
+      }
+    }
+  }
+  /* Illegal value, just return the first byte */
+  return p[0];
 }
 
 int utf_char2bytes(int c, unsigned char* buf)
 {
-	if (c < 0x80) {			/* 7 bits */
-		buf[0] = c;
-		return 1;
-	}
-	if (c < 0x800) {		/* 11 bits */
-		buf[0] = 0xc0 + ((unsigned)c >> 6);
-		buf[1] = 0x80 + (c & 0x3f);
-		return 2;
-	}
-	if (c < 0x10000) {		/* 16 bits */
-		buf[0] = 0xe0 + ((unsigned)c >> 12);
-		buf[1] = 0x80 + (((unsigned)c >> 6) & 0x3f);
-		buf[2] = 0x80 + (c & 0x3f);
-		return 3;
-	}
-	if (c < 0x200000) {		/* 21 bits */
-		buf[0] = 0xf0 + ((unsigned)c >> 18);
-		buf[1] = 0x80 + (((unsigned)c >> 12) & 0x3f);
-		buf[2] = 0x80 + (((unsigned)c >> 6) & 0x3f);
-		buf[3] = 0x80 + (c & 0x3f);
-		return 4;
-	}
-	if (c < 0x4000000) {	/* 26 bits */
-		buf[0] = 0xf8 + ((unsigned)c >> 24);
-		buf[1] = 0x80 + (((unsigned)c >> 18) & 0x3f);
-		buf[2] = 0x80 + (((unsigned)c >> 12) & 0x3f);
-		buf[3] = 0x80 + (((unsigned)c >> 6) & 0x3f);
-		buf[4] = 0x80 + (c & 0x3f);
-		return 5;
-	}
+  if (c < 0x80) {      /* 7 bits */
+    buf[0] = c;
+    return 1;
+  }
+  if (c < 0x800) {    /* 11 bits */
+    buf[0] = 0xc0 + ((unsigned)c >> 6);
+    buf[1] = 0x80 + (c & 0x3f);
+    return 2;
+  }
+  if (c < 0x10000) {    /* 16 bits */
+    buf[0] = 0xe0 + ((unsigned)c >> 12);
+    buf[1] = 0x80 + (((unsigned)c >> 6) & 0x3f);
+    buf[2] = 0x80 + (c & 0x3f);
+    return 3;
+  }
+  if (c < 0x200000) {    /* 21 bits */
+    buf[0] = 0xf0 + ((unsigned)c >> 18);
+    buf[1] = 0x80 + (((unsigned)c >> 12) & 0x3f);
+    buf[2] = 0x80 + (((unsigned)c >> 6) & 0x3f);
+    buf[3] = 0x80 + (c & 0x3f);
+    return 4;
+  }
+  if (c < 0x4000000) {  /* 26 bits */
+    buf[0] = 0xf8 + ((unsigned)c >> 24);
+    buf[1] = 0x80 + (((unsigned)c >> 18) & 0x3f);
+    buf[2] = 0x80 + (((unsigned)c >> 12) & 0x3f);
+    buf[3] = 0x80 + (((unsigned)c >> 6) & 0x3f);
+    buf[4] = 0x80 + (c & 0x3f);
+    return 5;
+  }
 
-	/* 31 bits */
-	buf[0] = 0xfc + ((unsigned)c >> 30);
-	buf[1] = 0x80 + (((unsigned)c >> 24) & 0x3f);
-	buf[2] = 0x80 + (((unsigned)c >> 18) & 0x3f);
-	buf[3] = 0x80 + (((unsigned)c >> 12) & 0x3f);
-	buf[4] = 0x80 + (((unsigned)c >> 6) & 0x3f);
-	buf[5] = 0x80 + (c & 0x3f);
-	return 6;
+  /* 31 bits */
+  buf[0] = 0xfc + ((unsigned)c >> 30);
+  buf[1] = 0x80 + (((unsigned)c >> 24) & 0x3f);
+  buf[2] = 0x80 + (((unsigned)c >> 18) & 0x3f);
+  buf[3] = 0x80 + (((unsigned)c >> 12) & 0x3f);
+  buf[4] = 0x80 + (((unsigned)c >> 6) & 0x3f);
+  buf[5] = 0x80 + (c & 0x3f);
+  return 6;
 }
 
 static int bisearch(wchar_t ucs, const struct interval *table, int max) {
@@ -220,7 +220,7 @@ int wcwidth(wchar_t ucs)
 
   /* binary search in table of non-spacing characters */
   if (bisearch(ucs, combining,
-	       sizeof(combining) / sizeof(struct interval) - 1))
+         sizeof(combining) / sizeof(struct interval) - 1))
     return 0;
 
   /* if we arrive here, ucs is not a combining or C0/C1 control character */
@@ -238,9 +238,9 @@ int wcwidth(wchar_t ucs)
 #ifndef _WIN32
       (ucs >= 0x20000 && ucs <= 0x2ffff)
 #else
-	  0
+    0
 #endif
-	  ));
+    ));
 }
 
 int wcswidth(const wchar_t *pwcs, size_t n)
@@ -318,7 +318,7 @@ static int wcwidth_cjk(wchar_t ucs)
 
   /* binary search in table of non-spacing characters */
   if (bisearch(ucs, ambiguous,
-	       sizeof(ambiguous) / sizeof(struct interval) - 1))
+         sizeof(ambiguous) / sizeof(struct interval) - 1))
     return 2;
 
   return wcwidth(ucs);
@@ -339,718 +339,718 @@ int wcswidth_cjk(const wchar_t *pwcs, size_t n)
 }
 
 tstring getTimeString(struct tm* _cur) {
-	struct tm* cur;
-	if (_cur)
-		cur = _cur;
-	else {
-		time_t tim;
-		time(&tim);
-		cur = localtime(&tim);
-	}
+  struct tm* cur;
+  if (_cur)
+    cur = _cur;
+  else {
+    time_t tim;
+    time(&tim);
+    cur = localtime(&tim);
+  }
 
-	tchar buf[256];
-	_stprintf(buf, _T("%04d/%02d/%02d %02d:%02d:%02d\n"),
-		cur->tm_year+1900,
-		cur->tm_mon,
-		cur->tm_mday,
-		cur->tm_hour,
-		cur->tm_min,
-		cur->tm_sec);
-	return buf;
+  tchar buf[256];
+  _stprintf(buf, _T("%04d/%02d/%02d %02d:%02d:%02d\n"),
+    cur->tm_year+1900,
+    cur->tm_mon,
+    cur->tm_mday,
+    cur->tm_hour,
+    cur->tm_min,
+    cur->tm_sec);
+  return buf;
 }
 
 std::string tstring2string(tstring strSrc) {
-	std::string strRet;
+  std::string strRet;
 #ifdef _UNICODE
-	UINT codePage = GetACP();
-	size_t mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)strSrc.c_str(), -1, NULL, 0, NULL, NULL);
-	char* pszStr = new char[mbssize+1];
-	mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)strSrc.c_str(), -1, pszStr, mbssize, NULL, NULL);
-	pszStr[mbssize] = '\0';
-	strRet = pszStr;
-	delete [] pszStr;
+  UINT codePage = GetACP();
+  size_t mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)strSrc.c_str(), -1, NULL, 0, NULL, NULL);
+  char* pszStr = new char[mbssize+1];
+  mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)strSrc.c_str(), -1, pszStr, mbssize, NULL, NULL);
+  pszStr[mbssize] = '\0';
+  strRet = pszStr;
+  delete [] pszStr;
 #else
-	strRet = strSrc;
+  strRet = strSrc;
 #endif
-	return strRet;
+  return strRet;
 }
 
 tstring string2tstring(std::string strSrc) {
-	tstring strRet;
+  tstring strRet;
 #ifdef _UNICODE
-	size_t in_len = strlen(strSrc.c_str());
-	UINT codePage = GetACP();
-	size_t wcssize = MultiByteToWideChar(codePage, 0, strSrc.c_str(),in_len,  NULL, 0);
-	wchar_t* pszStr = new wchar_t[wcssize + 1];
-	MultiByteToWideChar(codePage, 0, strSrc.c_str(), in_len, pszStr, wcssize + 1);
-	pszStr[wcssize] = '\0';
-	strRet = pszStr;
-	delete [] pszStr;
+  size_t in_len = strlen(strSrc.c_str());
+  UINT codePage = GetACP();
+  size_t wcssize = MultiByteToWideChar(codePage, 0, strSrc.c_str(),in_len,  NULL, 0);
+  wchar_t* pszStr = new wchar_t[wcssize + 1];
+  MultiByteToWideChar(codePage, 0, strSrc.c_str(), in_len, pszStr, wcssize + 1);
+  pszStr[wcssize] = '\0';
+  strRet = pszStr;
+  delete [] pszStr;
 #else
-	strRet = strSrc;
+  strRet = strSrc;
 #endif
-	return strRet;
+  return strRet;
 }
 
 std::string string_to_utf8(std::string str) {
-	std::string strRet;
-	std::wstring strSrc;
+  std::string strRet;
+  std::wstring strSrc;
 
 #ifdef _WIN32
-	UINT codePage;
-	size_t in_len = str.size();
-	codePage = GetACP();
-	size_t wcssize = MultiByteToWideChar(codePage, 0, str.c_str(),in_len,  NULL, 0);
-	wchar_t* pszStrWC = new wchar_t[wcssize + 1];
-	wcssize = MultiByteToWideChar(codePage, 0, str.c_str(), in_len, pszStrWC, wcssize + 1);
-	pszStrWC[wcssize] = '\0';
-	strSrc = pszStrWC;
-	delete [] pszStrWC;
+  UINT codePage;
+  size_t in_len = str.size();
+  codePage = GetACP();
+  size_t wcssize = MultiByteToWideChar(codePage, 0, str.c_str(),in_len,  NULL, 0);
+  wchar_t* pszStrWC = new wchar_t[wcssize + 1];
+  wcssize = MultiByteToWideChar(codePage, 0, str.c_str(), in_len, pszStrWC, wcssize + 1);
+  pszStrWC[wcssize] = '\0';
+  strSrc = pszStrWC;
+  delete [] pszStrWC;
 
-	codePage = CP_UTF8;
-	size_t mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)strSrc.c_str(), -1, NULL, 0, NULL, NULL);
-	char* pszStr = new char[mbssize + 1];
-	mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)strSrc.c_str(), -1, pszStr, mbssize, NULL, NULL);
-	pszStr[mbssize] = '\0';
-	strRet = pszStr;
-	delete [] pszStr;
+  codePage = CP_UTF8;
+  size_t mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)strSrc.c_str(), -1, NULL, 0, NULL, NULL);
+  char* pszStr = new char[mbssize + 1];
+  mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)strSrc.c_str(), -1, pszStr, mbssize, NULL, NULL);
+  pszStr[mbssize] = '\0';
+  strRet = pszStr;
+  delete [] pszStr;
 #else
-	char* ptr = (char*)str.c_str();
-	size_t mbssize = strlen(ptr);
-	size_t wcssize = mbssize;
-	wchar_t* pszStrWC = new wchar_t[wcssize + 1];
-	size_t n = 0, clen = 0, len = 0;
-	int tmp = mblen(NULL, 0);
-	while(len < mbssize) {
-		clen = mblen(ptr, MB_CUR_MAX);
-		if (clen <= 0) {
-			tmp = mblen(NULL, 0);
-			clen = 1;
-		}
-		clen = mbtowc(pszStrWC+n++, ptr,  clen);
-		if (clen <= 0) {
-			tmp = mblen(NULL, 0);
-			clen = 1;
-		}
-		len += clen;
-		ptr += clen;
-	}
-	pszStrWC[n] = 0;
-	wcssize = n;
-	for(n = 0; n < wcssize; n++) {
-		unsigned char bytes[8] = {0};
-		utf_char2bytes(pszStrWC[n], bytes);
-		strRet += (char*)bytes;
-	}
-	delete[] pszStrWC;
+  char* ptr = (char*)str.c_str();
+  size_t mbssize = strlen(ptr);
+  size_t wcssize = mbssize;
+  wchar_t* pszStrWC = new wchar_t[wcssize + 1];
+  size_t n = 0, clen = 0, len = 0;
+  int tmp = mblen(NULL, 0);
+  while(len < mbssize) {
+    clen = mblen(ptr, MB_CUR_MAX);
+    if (clen <= 0) {
+      tmp = mblen(NULL, 0);
+      clen = 1;
+    }
+    clen = mbtowc(pszStrWC+n++, ptr,  clen);
+    if (clen <= 0) {
+      tmp = mblen(NULL, 0);
+      clen = 1;
+    }
+    len += clen;
+    ptr += clen;
+  }
+  pszStrWC[n] = 0;
+  wcssize = n;
+  for(n = 0; n < wcssize; n++) {
+    unsigned char bytes[8] = {0};
+    utf_char2bytes(pszStrWC[n], bytes);
+    strRet += (char*)bytes;
+  }
+  delete[] pszStrWC;
 #endif
 
-	return strRet;
+  return strRet;
 }
 
 #ifdef _UNICODE
 tstring string_to_utf8(tstring str) {
-	return str;
+  return str;
 }
 #endif
 
 std::string utf8_to_string(std::string str) {
-	std::string strRet;
+  std::string strRet;
 
 #ifdef _WIN32
-	UINT codePage = CP_UTF8;
-	const char* ptr = str.c_str();
-	if (str[0] == (char)0xef && str[1] == (char)0xbb && str[2] == (char)0xbf)
-		ptr += 3;
-	size_t wcssize = MultiByteToWideChar(codePage, 0, ptr, -1,  NULL, 0);
-	wchar_t* pszStr = new wchar_t[wcssize + 1];
-	wcssize = MultiByteToWideChar(codePage, 0, ptr, -1, pszStr, wcssize + 1);
-	pszStr[wcssize] = '\0';
+  UINT codePage = CP_UTF8;
+  const char* ptr = str.c_str();
+  if (str[0] == (char)0xef && str[1] == (char)0xbb && str[2] == (char)0xbf)
+    ptr += 3;
+  size_t wcssize = MultiByteToWideChar(codePage, 0, ptr, -1,  NULL, 0);
+  wchar_t* pszStr = new wchar_t[wcssize + 1];
+  wcssize = MultiByteToWideChar(codePage, 0, ptr, -1, pszStr, wcssize + 1);
+  pszStr[wcssize] = '\0';
 
-	codePage = GetACP();
-	size_t mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)pszStr,-1,NULL,0,NULL,NULL);
-	char* pszStrMB = new char[mbssize+1];
-	mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)pszStr, -1, pszStrMB, mbssize, NULL, NULL);
-	pszStrMB[mbssize] = '\0';
-	strRet = pszStrMB;
-	delete [] pszStrMB;
+  codePage = GetACP();
+  size_t mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)pszStr,-1,NULL,0,NULL,NULL);
+  char* pszStrMB = new char[mbssize+1];
+  mbssize = WideCharToMultiByte(codePage, 0, (LPCWSTR)pszStr, -1, pszStrMB, mbssize, NULL, NULL);
+  pszStrMB[mbssize] = '\0';
+  strRet = pszStrMB;
+  delete [] pszStrMB;
 
-	delete [] pszStr;
+  delete [] pszStr;
 #else
-	char* ptr = (char*)str.c_str();
-	if (ptr[0] == (char)0xef && ptr[1] == (char)0xbb && ptr[2] == (char)0xbf)
-		ptr += 3;
-	size_t mbssize = strlen(ptr);
-	size_t wcssize = mbssize;
-	wchar_t* pszStrWC = new wchar_t[wcssize + 1];
-	size_t n = 0, clen = 0, len = 0;
-	while(len < mbssize) {
-		int c = utf_bytes2char((unsigned char*)ptr);
-		if (c == 0x301c) c = 0xff5e;
-		if (c == 0x2016) c = 0x2225;
-		if (c == 0x2212) c = 0xff0d;
-		if (c == 0x00a2) c = 0xffe0;
-		if (c == 0x00a3) c = 0xffe1;
-		if (c == 0x00ac) c = 0xffe2;
-		pszStrWC[n++] = c;
-		clen = utf8len_tab[(unsigned char)*ptr];
-		len += clen;
-		ptr += clen;
-	}
-	pszStrWC[n] = 0;
-	wcssize = n;
-	mbssize = wcslen(pszStrWC)*8;
-	char* pszStrMB = new char[mbssize + 1];
-	clen = 0;
-	len = 0;
-	for(n = 0; n < wcssize; n++) {
-		clen = wctomb(pszStrMB+len, pszStrWC[n]);
-		len += clen <= 0 ? 1 : clen;
-	}
-	*(pszStrMB+len) = 0;
-	delete[] pszStrWC;
-	strRet = pszStrMB;
-	delete[] pszStrMB;
+  char* ptr = (char*)str.c_str();
+  if (ptr[0] == (char)0xef && ptr[1] == (char)0xbb && ptr[2] == (char)0xbf)
+    ptr += 3;
+  size_t mbssize = strlen(ptr);
+  size_t wcssize = mbssize;
+  wchar_t* pszStrWC = new wchar_t[wcssize + 1];
+  size_t n = 0, clen = 0, len = 0;
+  while(len < mbssize) {
+    int c = utf_bytes2char((unsigned char*)ptr);
+    if (c == 0x301c) c = 0xff5e;
+    if (c == 0x2016) c = 0x2225;
+    if (c == 0x2212) c = 0xff0d;
+    if (c == 0x00a2) c = 0xffe0;
+    if (c == 0x00a3) c = 0xffe1;
+    if (c == 0x00ac) c = 0xffe2;
+    pszStrWC[n++] = c;
+    clen = utf8len_tab[(unsigned char)*ptr];
+    len += clen;
+    ptr += clen;
+  }
+  pszStrWC[n] = 0;
+  wcssize = n;
+  mbssize = wcslen(pszStrWC)*8;
+  char* pszStrMB = new char[mbssize + 1];
+  clen = 0;
+  len = 0;
+  for(n = 0; n < wcssize; n++) {
+    clen = wctomb(pszStrMB+len, pszStrWC[n]);
+    len += clen <= 0 ? 1 : clen;
+  }
+  *(pszStrMB+len) = 0;
+  delete[] pszStrWC;
+  strRet = pszStrMB;
+  delete[] pszStrMB;
 #endif
 
-	return strRet;
+  return strRet;
 }
 
 #ifdef _UNICODE
 tstring utf8_to_string(tstring str) {
-	return str;
+  return str;
 }
 #endif
 
 #ifdef HAVE_ICONV
 std::string convert_string(const std::string str, const std::string from_codeset, const std::string to_codeset) {
-	char *dest = NULL;
-	iconv_t cd;
-	char *outp;
-	char *p = (char *) str.c_str();
-	size_t inbytes_remaining = strlen (p);
-	size_t outbuf_size = inbytes_remaining + 1;
-	size_t outbytes_remaining;
-	size_t err;
-	int have_error = 0;
+  char *dest = NULL;
+  iconv_t cd;
+  char *outp;
+  char *p = (char *) str.c_str();
+  size_t inbytes_remaining = strlen (p);
+  size_t outbuf_size = inbytes_remaining + 1;
+  size_t outbytes_remaining;
+  size_t err;
+  int have_error = 0;
 
-	outbuf_size *= MB_LEN_MAX;
-	outbytes_remaining = outbuf_size - 1;
+  outbuf_size *= MB_LEN_MAX;
+  outbytes_remaining = outbuf_size - 1;
 
-	if (strcmp(to_codeset.c_str(), from_codeset.c_str()) == 0)
-		return str.c_str();
+  if (strcmp(to_codeset.c_str(), from_codeset.c_str()) == 0)
+    return str.c_str();
 
-	cd = iconv_open(to_codeset.c_str(), from_codeset.c_str());
-	if (cd == (iconv_t) -1)
-		return str.c_str();
+  cd = iconv_open(to_codeset.c_str(), from_codeset.c_str());
+  if (cd == (iconv_t) -1)
+    return str.c_str();
 
-	outp = dest = (char *) malloc (outbuf_size);
-	if (dest == NULL)
-		goto out;
+  outp = dest = (char *) malloc (outbuf_size);
+  if (dest == NULL)
+    goto out;
 
 again:
 #if defined(_LIBICONV_VERSION) && _LIBICONV_VERSION <= 0x010A
-	err = iconv(cd, (const char**)&p, &inbytes_remaining, &outp, &outbytes_remaining);
+  err = iconv(cd, (const char**)&p, &inbytes_remaining, &outp, &outbytes_remaining);
 #else
-	err = iconv(cd, (char**)&p, &inbytes_remaining, &outp, &outbytes_remaining);
+  err = iconv(cd, (char**)&p, &inbytes_remaining, &outp, &outbytes_remaining);
 #endif
-	if (err == (size_t) - 1) {
-		switch (errno) {
-			case EINVAL:
-				break;
-			case E2BIG:
-				{
-					size_t used = outp - dest;
-					size_t newsize = outbuf_size * 2;
-					char *newdest;
+  if (err == (size_t) - 1) {
+    switch (errno) {
+      case EINVAL:
+        break;
+      case E2BIG:
+        {
+          size_t used = outp - dest;
+          size_t newsize = outbuf_size * 2;
+          char *newdest;
 
-					if (newsize <= outbuf_size) {
-						errno = ENOMEM;
-						have_error = 1;
-						goto out;
-					}
-					newdest = (char *) realloc (dest, newsize);
-					if (newdest == NULL) {
-						have_error = 1;
-						goto out;
-					}
-					dest = newdest;
-					outbuf_size = newsize;
+          if (newsize <= outbuf_size) {
+            errno = ENOMEM;
+            have_error = 1;
+            goto out;
+          }
+          newdest = (char *) realloc (dest, newsize);
+          if (newdest == NULL) {
+            have_error = 1;
+            goto out;
+          }
+          dest = newdest;
+          outbuf_size = newsize;
 
-					outp = dest + used;
-					outbytes_remaining = outbuf_size - used - 1;        /* -1 for NUL */
+          outp = dest + used;
+          outbytes_remaining = outbuf_size - used - 1;        /* -1 for NUL */
 
-					goto again;
-				}
-				break;
-			case EILSEQ:
-				have_error = 1;
-				break;
-			default:
-				have_error = 1;
-				break;
-		}
-	}
+          goto again;
+        }
+        break;
+      case EILSEQ:
+        have_error = 1;
+        break;
+      default:
+        have_error = 1;
+        break;
+    }
+  }
 
-	*outp = '\0';
+  *outp = '\0';
 
 out:
-	{
-		int save_errno = errno;
+  {
+    int save_errno = errno;
 
-		if (iconv_close (cd) < 0 && !have_error) {
-			/* If we didn't have a real error before, make sure we restore
-			   the iconv_close error below. */
-			save_errno = errno;
-			have_error = 1;
-		}
+    if (iconv_close (cd) < 0 && !have_error) {
+      /* If we didn't have a real error before, make sure we restore
+         the iconv_close error below. */
+      save_errno = errno;
+      have_error = 1;
+    }
 
-		if (have_error && dest) {
-			free (dest);
-			dest = (char*)str.c_str();
-			errno = save_errno;
-		}
-	}
+    if (have_error && dest) {
+      free (dest);
+      dest = (char*)str.c_str();
+      errno = save_errno;
+    }
+  }
 
-	return dest;
+  return dest;
 }
 #endif
 
 std::string cut_string(std::string str, int cells, std::string padding) {
-	char* ptr = (char*)str.c_str();
-	size_t mbssize = strlen(ptr);
-	size_t wcssize = mbssize;
-	wchar_t* pszStrWC = new wchar_t[wcssize + 1];
-	size_t n = 0;
+  char* ptr = (char*)str.c_str();
+  size_t mbssize = strlen(ptr);
+  size_t wcssize = mbssize;
+  wchar_t* pszStrWC = new wchar_t[wcssize + 1];
+  size_t n = 0;
 #ifdef _WIN32
-	n = MultiByteToWideChar(GetACP(), 0, ptr, mbssize, pszStrWC, wcssize + 1);
-	pszStrWC[n] = 0;
+  n = MultiByteToWideChar(GetACP(), 0, ptr, mbssize, pszStrWC, wcssize + 1);
+  pszStrWC[n] = 0;
 #else
-	size_t clen = 0, len = 0;
-	int tmp = mblen(NULL, 0);
-	while(len < mbssize) {
-		clen = mblen(ptr, MB_CUR_MAX);
-		if (clen <= 0) {
-			tmp = mblen(NULL, 0);
-			clen = 1;
-		}
-		clen = mbtowc(pszStrWC+n++, ptr,  clen);
-		if (clen <= 0) {
-			tmp = mblen(NULL, 0);
-			clen = 1;
-		}
-		len += clen;
-		ptr += clen;
-	}
-	pszStrWC[n] = 0;
+  size_t clen = 0, len = 0;
+  int tmp = mblen(NULL, 0);
+  while(len < mbssize) {
+    clen = mblen(ptr, MB_CUR_MAX);
+    if (clen <= 0) {
+      tmp = mblen(NULL, 0);
+      clen = 1;
+    }
+    clen = mbtowc(pszStrWC+n++, ptr,  clen);
+    if (clen <= 0) {
+      tmp = mblen(NULL, 0);
+      clen = 1;
+    }
+    len += clen;
+    ptr += clen;
+  }
+  pszStrWC[n] = 0;
 #endif
-	wcssize = n;
-	int width = 0;
-	for(n = 0; n < wcssize; n++) {
-		int c = wcwidth_cjk(pszStrWC[n]);
-		if (width + c > cells) {
-			pszStrWC[n] = 0;
-			break;
-		}
-		width += c;
-	}
-	char* pszStrMB;
+  wcssize = n;
+  int width = 0;
+  for(n = 0; n < wcssize; n++) {
+    int c = wcwidth_cjk(pszStrWC[n]);
+    if (width + c > cells) {
+      pszStrWC[n] = 0;
+      break;
+    }
+    width += c;
+  }
+  char* pszStrMB;
 #ifdef _WIN32
-	mbssize = WideCharToMultiByte(GetACP(), 0, pszStrWC, -1, NULL, 0, NULL, NULL);
-	pszStrMB = new char[mbssize + 1];
-	mbssize = WideCharToMultiByte(GetACP(), 0, pszStrWC, -1, pszStrMB, mbssize, NULL, NULL);
-	pszStrMB[mbssize] = 0;
+  mbssize = WideCharToMultiByte(GetACP(), 0, pszStrWC, -1, NULL, 0, NULL, NULL);
+  pszStrMB = new char[mbssize + 1];
+  mbssize = WideCharToMultiByte(GetACP(), 0, pszStrWC, -1, pszStrMB, mbssize, NULL, NULL);
+  pszStrMB[mbssize] = 0;
 #else
-	wcssize = wcslen(pszStrWC);
-	mbssize = wcssize*8;
-	pszStrMB = new char[mbssize + 1];
-	clen = 0;
-	len = 0;
-	for(n = 0; n < wcssize; n++) {
-		clen = wctomb(pszStrMB+len, pszStrWC[n]);
-		len += clen <= 0 ? 1 : clen;
-	}
-	*(pszStrMB+len) = 0;
+  wcssize = wcslen(pszStrWC);
+  mbssize = wcssize*8;
+  pszStrMB = new char[mbssize + 1];
+  clen = 0;
+  len = 0;
+  for(n = 0; n < wcssize; n++) {
+    clen = wctomb(pszStrMB+len, pszStrWC[n]);
+    len += clen <= 0 ? 1 : clen;
+  }
+  *(pszStrMB+len) = 0;
 #endif
-	delete[] pszStrWC;
-	std::string ret = pszStrMB;
-	delete[] pszStrMB;
-	if (ret.size() < str.size())
-		ret += padding;
-	return ret;
+  delete[] pszStrWC;
+  std::string ret = pszStrMB;
+  delete[] pszStrMB;
+  if (ret.size() < str.size())
+    ret += padding;
+  return ret;
 }
 
 std::string cut_string_r(std::string str, int cells, std::string padding) {
-	char* ptr = (char*)str.c_str();
-	size_t mbssize = strlen(ptr);
-	size_t wcssize = mbssize;
-	wchar_t* pszStrWC = new wchar_t[wcssize + 1];
-	size_t n = 0;
+  char* ptr = (char*)str.c_str();
+  size_t mbssize = strlen(ptr);
+  size_t wcssize = mbssize;
+  wchar_t* pszStrWC = new wchar_t[wcssize + 1];
+  size_t n = 0;
 #ifdef _WIN32
-	n = MultiByteToWideChar(GetACP(), 0, ptr, mbssize, pszStrWC, wcssize + 1);
-	pszStrWC[n] = 0;
+  n = MultiByteToWideChar(GetACP(), 0, ptr, mbssize, pszStrWC, wcssize + 1);
+  pszStrWC[n] = 0;
 #else
-	size_t clen = 0, len = 0;
-	int tmp = mblen(NULL, 0);
-	while(len < mbssize) {
-		clen = mblen(ptr, MB_CUR_MAX);
-		if (clen <= 0) {
-			tmp = mblen(NULL, 0);
-			clen = 1;
-		}
-		clen = mbtowc(pszStrWC+n++, ptr,  clen);
-		if (clen <= 0) {
-			tmp = mblen(NULL, 0);
-			clen = 1;
-		}
-		len += clen;
-		ptr += clen;
-	}
-	pszStrWC[n] = 0;
+  size_t clen = 0, len = 0;
+  int tmp = mblen(NULL, 0);
+  while(len < mbssize) {
+    clen = mblen(ptr, MB_CUR_MAX);
+    if (clen <= 0) {
+      tmp = mblen(NULL, 0);
+      clen = 1;
+    }
+    clen = mbtowc(pszStrWC+n++, ptr,  clen);
+    if (clen <= 0) {
+      tmp = mblen(NULL, 0);
+      clen = 1;
+    }
+    len += clen;
+    ptr += clen;
+  }
+  pszStrWC[n] = 0;
 #endif
-	wcssize = n;
-	int width = 0;
-	for(n = wcssize-1; n >= 0; n--) {
-		int c = wcwidth_cjk(pszStrWC[n]);
-		if (width + c > cells) {
-			pszStrWC[n] = 0;
-			wcscpy(pszStrWC, pszStrWC+n+1);
-			break;
-		}
-		width += c;
-	}
-	char* pszStrMB;
+  wcssize = n;
+  int width = 0;
+  for(n = wcssize-1; n >= 0; n--) {
+    int c = wcwidth_cjk(pszStrWC[n]);
+    if (width + c > cells) {
+      pszStrWC[n] = 0;
+      wcscpy(pszStrWC, pszStrWC+n+1);
+      break;
+    }
+    width += c;
+  }
+  char* pszStrMB;
 #ifdef _WIN32
-	mbssize = WideCharToMultiByte(GetACP(), 0, pszStrWC, -1, NULL, 0, NULL, NULL);
-	pszStrMB = new char[mbssize + 1];
-	mbssize = WideCharToMultiByte(GetACP(), 0, pszStrWC, -1, pszStrMB, mbssize, NULL, NULL);
-	pszStrMB[mbssize] = 0;
+  mbssize = WideCharToMultiByte(GetACP(), 0, pszStrWC, -1, NULL, 0, NULL, NULL);
+  pszStrMB = new char[mbssize + 1];
+  mbssize = WideCharToMultiByte(GetACP(), 0, pszStrWC, -1, pszStrMB, mbssize, NULL, NULL);
+  pszStrMB[mbssize] = 0;
 #else
-	wcssize = wcslen(pszStrWC);
-	mbssize = wcssize*8;
-	pszStrMB = new char[mbssize + 1];
-	clen = 0;
-	len = 0;
-	for(n = 0; n < wcssize; n++) {
-		clen = wctomb(pszStrMB+len, pszStrWC[n]);
-		len += clen <= 0 ? 1 : clen;
-	}
-	*(pszStrMB+len) = 0;
+  wcssize = wcslen(pszStrWC);
+  mbssize = wcssize*8;
+  pszStrMB = new char[mbssize + 1];
+  clen = 0;
+  len = 0;
+  for(n = 0; n < wcssize; n++) {
+    clen = wctomb(pszStrMB+len, pszStrWC[n]);
+    len += clen <= 0 ? 1 : clen;
+  }
+  *(pszStrMB+len) = 0;
 #endif
-	delete[] pszStrWC;
-	std::string ret = pszStrMB;
-	delete[] pszStrMB;
-	if (ret.size() < str.size())
-		ret = padding + ret;
-	return ret;
+  delete[] pszStrWC;
+  std::string ret = pszStrMB;
+  delete[] pszStrMB;
+  if (ret.size() < str.size())
+    ret = padding + ret;
+  return ret;
 }
 
 std::vector<std::string> split_string(std::string strSrc, std::string strKey) {
-	std::vector<std::string> vecLines;
-	std::string strTmp = strSrc;
+  std::vector<std::string> vecLines;
+  std::string strTmp = strSrc;
 
-	size_t iIndex = 0;
-	while (iIndex < strTmp.length()) {
-		int iOldIndex = iIndex;
-		iIndex = strTmp.find(strKey, iIndex);
-		if(iIndex != std::string::npos) {
-			vecLines.push_back(strTmp.substr(iOldIndex, iIndex - iOldIndex));
-		} else {
-			vecLines.push_back(strTmp.substr(iOldIndex));
-			break;
-		}
-		iIndex += strKey.length();
-	}
-	return vecLines;
+  size_t iIndex = 0;
+  while (iIndex < strTmp.length()) {
+    int iOldIndex = iIndex;
+    iIndex = strTmp.find(strKey, iIndex);
+    if(iIndex != std::string::npos) {
+      vecLines.push_back(strTmp.substr(iOldIndex, iIndex - iOldIndex));
+    } else {
+      vecLines.push_back(strTmp.substr(iOldIndex));
+      break;
+    }
+    iIndex += strKey.length();
+  }
+  return vecLines;
 }
 
 void split_string(std::string strSrc, std::string strKey, std::vector<std::string>& vecLines) {
-	std::string strTmp = strSrc;
+  std::string strTmp = strSrc;
 
-	vecLines.clear();
-	size_t iIndex = 0;
-	while (iIndex < strTmp.length()) {
-		int iOldIndex = iIndex;
-		iIndex = strTmp.find(strKey, iIndex);
-		if(iIndex != std::string::npos) {
-			std::string item = strTmp.substr(iOldIndex, iIndex - iOldIndex);
-			vecLines.push_back(item);
-		} else {
-			std::string item = strTmp.substr(iOldIndex);
-			vecLines.push_back(item);
-			break;
-		}
-		iIndex += strKey.length();
-	}
+  vecLines.clear();
+  size_t iIndex = 0;
+  while (iIndex < strTmp.length()) {
+    int iOldIndex = iIndex;
+    iIndex = strTmp.find(strKey, iIndex);
+    if(iIndex != std::string::npos) {
+      std::string item = strTmp.substr(iOldIndex, iIndex - iOldIndex);
+      vecLines.push_back(item);
+    } else {
+      std::string item = strTmp.substr(iOldIndex);
+      vecLines.push_back(item);
+      break;
+    }
+    iIndex += strKey.length();
+  }
 }
 
 #ifdef _UNICODE
 std::vector<tstring> split_string(tstring strSrc, tstring strKey) {
-	std::vector<tstring> vecLines;
-	tstring strTmp = strSrc;
+  std::vector<tstring> vecLines;
+  tstring strTmp = strSrc;
 
-	int iIndex = 0;
-	while (iIndex < (int)strTmp.length()) {
-		int iOldIndex = iIndex;
-		iIndex = strTmp.find(strKey, iIndex);
-		if(iIndex != tstring::npos) {
-			tstring item = strTmp.substr(iOldIndex, iIndex - iOldIndex);
-			vecLines.push_back(item);
-		} else {
-			tstring item = strTmp.substr(iOldIndex);
-			vecLines.push_back(item);
-			break;
-		}
-		iIndex += strKey.length();
-	}
-	return vecLines;
+  int iIndex = 0;
+  while (iIndex < (int)strTmp.length()) {
+    int iOldIndex = iIndex;
+    iIndex = strTmp.find(strKey, iIndex);
+    if(iIndex != tstring::npos) {
+      tstring item = strTmp.substr(iOldIndex, iIndex - iOldIndex);
+      vecLines.push_back(item);
+    } else {
+      tstring item = strTmp.substr(iOldIndex);
+      vecLines.push_back(item);
+      break;
+    }
+    iIndex += strKey.length();
+  }
+  return vecLines;
 }
 #endif
 
 std::string trim_string(const std::string strSrc) {
-	std::string ret = strSrc;
-	int end_pos = ret.find_last_not_of(" \n");
-	if(end_pos != -1) {
-		ret.erase(end_pos + 1);
-		end_pos = ret.find_first_not_of(" \n");
-		if(end_pos != -1) ret.erase(0, end_pos);
-	}
-	else ret.erase(ret.begin(), ret.end());
-	return ret;
+  std::string ret = strSrc;
+  int end_pos = ret.find_last_not_of(" \n");
+  if(end_pos != -1) {
+    ret.erase(end_pos + 1);
+    end_pos = ret.find_first_not_of(" \n");
+    if(end_pos != -1) ret.erase(0, end_pos);
+  }
+  else ret.erase(ret.begin(), ret.end());
+  return ret;
 }
 #ifdef _UNICODE
 tstring trim_string(const tstring strSrc) {
-	tstring ret = strSrc;
-	int end_pos = ret.find_last_not_of(' ');
-	if(end_pos != -1) {
-		ret.erase(end_pos + 1);
-		end_pos = ret.find_first_not_of(' ');
-		if(end_pos != -1) ret.erase(0, end_pos);
-	}
-	else ret.erase(ret.begin(), ret.end());
-	return ret;
+  tstring ret = strSrc;
+  int end_pos = ret.find_last_not_of(' ');
+  if(end_pos != -1) {
+    ret.erase(end_pos + 1);
+    end_pos = ret.find_first_not_of(' ');
+    if(end_pos != -1) ret.erase(0, end_pos);
+  }
+  else ret.erase(ret.begin(), ret.end());
+  return ret;
 }
 #endif
 
 std::string& replace_string(std::string& strSrc, const std::string strFrom, const std::string strTo) {
-	std::string::size_type n, nb = 0;
+  std::string::size_type n, nb = 0;
 
-	while((n = strSrc.find(strFrom, nb)) != std::string::npos) {
-		strSrc.replace(n, strFrom.size(), strTo);
-		nb = n + strTo.size();
-	}
-	return strSrc;
+  while((n = strSrc.find(strFrom, nb)) != std::string::npos) {
+    strSrc.replace(n, strFrom.size(), strTo);
+    nb = n + strTo.size();
+  }
+  return strSrc;
 }
 #ifdef _UNICODE
 tstring& replace_string(tstring& strSrc, const tstring strFrom, const tstring strTo) {
-	tstring::size_type n, nb = 0;
+  tstring::size_type n, nb = 0;
 
-	while((n = strSrc.find(strFrom, nb)) != tstring::npos) {
-		strSrc.replace(n, strFrom.size(), strTo);
-		nb = n + strTo.size();
-	}
-	return strSrc;
+  while((n = strSrc.find(strFrom, nb)) != tstring::npos) {
+    strSrc.replace(n, strFrom.size(), strTo);
+    nb = n + strTo.size();
+  }
+  return strSrc;
 }
 #endif
 
 std::string base64_encode(unsigned char const* bytes_to_encode, unsigned int in_len) {
-	std::string ret;
-	int i = 0;
-	int j = 0;
-	unsigned char char_array_3[3] = {0};
-	unsigned char char_array_4[4] = {0};
+  std::string ret;
+  int i = 0;
+  int j = 0;
+  unsigned char char_array_3[3] = {0};
+  unsigned char char_array_4[4] = {0};
 
-	while (in_len--) {
-		char_array_3[i++] = *(bytes_to_encode++);
-		if (i == 3) {
-			char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-			char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-			char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-			char_array_4[3] = char_array_3[2] & 0x3f;
+  while (in_len--) {
+    char_array_3[i++] = *(bytes_to_encode++);
+    if (i == 3) {
+      char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+      char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+      char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+      char_array_4[3] = char_array_3[2] & 0x3f;
 
-			for(i = 0; (i <4) ; i++)
-				ret += base64_chars[char_array_4[i]];
-			i = 0;
-		}
-	}
+      for(i = 0; (i <4) ; i++)
+        ret += base64_chars[char_array_4[i]];
+      i = 0;
+    }
+  }
 
-	if (i) {
-		for(j = i; j < 3; j++)
-			char_array_3[j] = '\0';
+  if (i) {
+    for(j = i; j < 3; j++)
+      char_array_3[j] = '\0';
 
-		char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-		char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-		char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-		char_array_4[3] = char_array_3[2] & 0x3f;
+    char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+    char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+    char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+    char_array_4[3] = char_array_3[2] & 0x3f;
 
-		for (j = 0; (j < i + 1); j++)
-			ret += base64_chars[char_array_4[j]];
+    for (j = 0; (j < i + 1); j++)
+      ret += base64_chars[char_array_4[j]];
 
-		while((i++ < 3))
-			ret += '=';
-	}
+    while((i++ < 3))
+      ret += '=';
+  }
 
-	return ret;
+  return ret;
 }
 
 std::string base64_decode(std::string const& encoded_string) {
-	int in_len = encoded_string.size();
-	int i = 0;
-	int j = 0;
-	int in_ = 0;
-	unsigned char char_array_4[4] = {0};
-	unsigned char char_array_3[3] = {0};
-	std::string ret;
+  int in_len = encoded_string.size();
+  int i = 0;
+  int j = 0;
+  int in_ = 0;
+  unsigned char char_array_4[4] = {0};
+  unsigned char char_array_3[3] = {0};
+  std::string ret;
 
-	while (in_len-- && ( encoded_string[in_] != '=') && is_base64(encoded_string[in_])) {
-		char_array_4[i++] = encoded_string[in_]; in_++;
-		if (i ==4) {
-			for (i = 0; i <4; i++)
-				char_array_4[i] = base64_chars.find(char_array_4[i]);
+  while (in_len-- && ( encoded_string[in_] != '=') && is_base64(encoded_string[in_])) {
+    char_array_4[i++] = encoded_string[in_]; in_++;
+    if (i ==4) {
+      for (i = 0; i <4; i++)
+        char_array_4[i] = base64_chars.find(char_array_4[i]);
 
-			char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-			char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-			char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+      char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+      char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+      char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
 
-			for (i = 0; (i < 3); i++)
-				ret += char_array_3[i];
-			i = 0;
-		}
-	}
+      for (i = 0; (i < 3); i++)
+        ret += char_array_3[i];
+      i = 0;
+    }
+  }
 
-	if (i) {
-		for (j = i; j <4; j++)
-			char_array_4[j] = 0;
+  if (i) {
+    for (j = i; j <4; j++)
+      char_array_4[j] = 0;
 
-		for (j = 0; j <4; j++)
-			char_array_4[j] = base64_chars.find(char_array_4[j]);
+    for (j = 0; j <4; j++)
+      char_array_4[j] = base64_chars.find(char_array_4[j]);
 
-		char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-		char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-		char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+    char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+    char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+    char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
 
-		for (j = 0; (j < i - 1); j++)
-			ret += char_array_3[j];
-	}
+    for (j = 0; (j < i - 1); j++)
+      ret += char_array_3[j];
+  }
 
-	return ret;
+  return ret;
 }
 
 std::vector<char> base64_decode_binary(std::string const& encoded_string) {
-	int in_len = encoded_string.size();
-	int i = 0;
-	int j = 0;
-	int in_ = 0;
-	unsigned char char_array_4[4] = {0};
-	unsigned char char_array_3[3] = {0};
-	std::vector<char> ret;
+  int in_len = encoded_string.size();
+  int i = 0;
+  int j = 0;
+  int in_ = 0;
+  unsigned char char_array_4[4] = {0};
+  unsigned char char_array_3[3] = {0};
+  std::vector<char> ret;
 
-	while (in_len-- && ( encoded_string[in_] != '=') && is_base64(encoded_string[in_])) {
-		char_array_4[i++] = encoded_string[in_]; in_++;
-		if (i ==4) {
-			for (i = 0; i <4; i++)
-				char_array_4[i] = base64_chars.find(char_array_4[i]);
+  while (in_len-- && ( encoded_string[in_] != '=') && is_base64(encoded_string[in_])) {
+    char_array_4[i++] = encoded_string[in_]; in_++;
+    if (i ==4) {
+      for (i = 0; i <4; i++)
+        char_array_4[i] = base64_chars.find(char_array_4[i]);
 
-			char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-			char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-			char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+      char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+      char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+      char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
 
-			for (i = 0; (i < 3); i++)
-				ret.push_back(char_array_3[i]);
-			i = 0;
-		}
-	}
+      for (i = 0; (i < 3); i++)
+        ret.push_back(char_array_3[i]);
+      i = 0;
+    }
+  }
 
-	if (i) {
-		for (j = i; j <4; j++)
-			char_array_4[j] = 0;
+  if (i) {
+    for (j = i; j <4; j++)
+      char_array_4[j] = 0;
 
-		for (j = 0; j <4; j++)
-			char_array_4[j] = base64_chars.find(char_array_4[j]);
+    for (j = 0; j <4; j++)
+      char_array_4[j] = base64_chars.find(char_array_4[j]);
 
-		char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-		char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-		char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+    char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+    char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+    char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
 
-		for (j = 0; (j < i - 1); j++)
-			ret.push_back(char_array_3[j]);
-	}
+    for (j = 0; (j < i - 1); j++)
+      ret.push_back(char_array_3[j]);
+  }
 
-	return ret;
+  return ret;
 }
 
 std::string url_decode(const std::string& url) {
-	std::ostringstream rets;
-	std::string hexstr;
-	for(size_t n = 0; n < url.size(); n++) {
-		switch(url[n]) {
-		case '+':
-			rets << ' ';
-			break;
-		case '%':
-			hexstr = url.substr(n+1, 2);
-			n += 2;
-			if (hexstr == "26" || hexstr == "3D")
-				rets << '%' << hexstr;
-			else {
-				std::istringstream hexstream(hexstr);
-				int hexint;
-				hexstream >> std::hex >> hexint;
-				rets << static_cast<char>(hexint);
-			}
-			break;
-		default:
-			rets << url[n];
-			break;
-		}
-	}
-	return rets.str();
+  std::ostringstream rets;
+  std::string hexstr;
+  for(size_t n = 0; n < url.size(); n++) {
+    switch(url[n]) {
+    case '+':
+      rets << ' ';
+      break;
+    case '%':
+      hexstr = url.substr(n+1, 2);
+      n += 2;
+      if (hexstr == "26" || hexstr == "3D")
+        rets << '%' << hexstr;
+      else {
+        std::istringstream hexstream(hexstr);
+        int hexint;
+        hexstream >> std::hex >> hexint;
+        rets << static_cast<char>(hexint);
+      }
+      break;
+    default:
+      rets << url[n];
+      break;
+    }
+  }
+  return rets.str();
 }
 
 std::string url_encode(const std::string& url) {
-	std::ostringstream rets;
-	for(size_t n = 0; n < url.size(); n++) {
-		unsigned char c = (unsigned char)url[n];
-		if (isalnum(c) || c == '_' || c == '.' || c == '/' )
-			rets << c;
-		else {
-			char buf[8];
-			sprintf(buf, "%02x", (int)c);
-			rets << '%' << buf[0] << buf[1];
-		}
-	}
-	return rets.str();
+  std::ostringstream rets;
+  for(size_t n = 0; n < url.size(); n++) {
+    unsigned char c = (unsigned char)url[n];
+    if (isalnum(c) || c == '_' || c == '.' || c == '/' )
+      rets << c;
+    else {
+      char buf[8];
+      sprintf(buf, "%02x", (int)c);
+      rets << '%' << buf[0] << buf[1];
+    }
+  }
+  return rets.str();
 }
 
 std::string html_encode(const std::string& html) {
-	std::string ret = html;
-	replace_string(ret, "&", "&amp;");
-	replace_string(ret, "<", "&lt;");
-	replace_string(ret, ">", "&gt;");
-	return ret;
+  std::string ret = html;
+  replace_string(ret, "&", "&amp;");
+  replace_string(ret, "<", "&lt;");
+  replace_string(ret, ">", "&gt;");
+  return ret;
 }
 
 std::string html_decode(const std::string& html) {
-	std::string ret = html;
-	replace_string(ret, "&gt;", ">");
-	replace_string(ret, "&lt;", "<");
-	replace_string(ret, "&nbsp;", " ");
-	replace_string(ret, "&amp;", "&");
-	return ret;
+  std::string ret = html;
+  replace_string(ret, "&gt;", ">");
+  replace_string(ret, "&lt;", "<");
+  replace_string(ret, "&nbsp;", " ");
+  replace_string(ret, "&amp;", "&");
+  return ret;
 }
 
 std::map<std::string, std::string> parse_querystring(const std::string& query_string) {
-	std::vector<std::string> params = split_string(query_string, "&");
-	std::vector<std::string>::iterator it;
-	std::map<std::string, std::string> ret;
-	for (it = params.begin(); it != params.end(); it++) {
-		size_t end_pos = it->find_first_of("=");
-		if (end_pos != std::string::npos)
-			ret[it->substr(0, end_pos)] = url_decode(it->substr(end_pos + 1));
-		else
-			ret[*it] = "";
-	}
-	return ret;
+  std::vector<std::string> params = split_string(query_string, "&");
+  std::vector<std::string>::iterator it;
+  std::map<std::string, std::string> ret;
+  for (it = params.begin(); it != params.end(); it++) {
+    size_t end_pos = it->find_first_of("=");
+    if (end_pos != std::string::npos)
+      ret[it->substr(0, end_pos)] = url_decode(it->substr(end_pos + 1));
+    else
+      ret[*it] = "";
+  }
+  return ret;
 }
 
 #ifndef uint8
@@ -1086,249 +1086,249 @@ std::map<std::string, std::string> parse_querystring(const std::string& query_st
 #define F3(X, Y, Z) ((X) ^ (Y) ^ (Z))
 #define F4(X, Y, Z) ((Y) ^ ((X) | ~(Z)))
 #define ROUND(r, a, b, c, d, F, i, s) { a = b + _rotl(a + F(b, c, d) + reinterpret_cast<const uint32 *>(block)[i] + SIN##r, s); }
-#define SIN1	3614090360ul
-#define SIN2	3905402710ul
-#define SIN3	606105819ul
-#define SIN4	3250441966ul
-#define SIN5	4118548399ul
-#define SIN6	1200080426ul
-#define SIN7	2821735955ul
-#define SIN8	4249261313ul
-#define SIN9	1770035416ul
-#define SIN10	2336552879ul
-#define SIN11	4294925233ul
-#define SIN12	2304563134ul
-#define SIN13	1804603682ul
-#define SIN14	4254626195ul
-#define SIN15	2792965006ul
-#define SIN16	1236535329ul
-#define SIN17	4129170786ul
-#define SIN18	3225465664ul
-#define SIN19	643717713ul
-#define SIN20	3921069994ul
-#define SIN21	3593408605ul
-#define SIN22	38016083ul
-#define SIN23	3634488961ul
-#define SIN24	3889429448ul
-#define SIN25	568446438ul
-#define SIN26	3275163606ul
-#define SIN27	4107603335ul
-#define SIN28	1163531501ul
-#define SIN29	2850285829ul
-#define SIN30	4243563512ul
-#define SIN31	1735328473ul
-#define SIN32	2368359562ul
-#define SIN33	4294588738ul
-#define SIN34	2272392833ul
-#define SIN35	1839030562ul
-#define SIN36	4259657740ul
-#define SIN37	2763975236ul
-#define SIN38	1272893353ul
-#define SIN39	4139469664ul
-#define SIN40	3200236656ul
-#define SIN41	681279174ul
-#define SIN42	3936430074ul
-#define SIN43	3572445317ul
-#define SIN44	76029189ul
-#define SIN45	3654602809ul
-#define SIN46	3873151461ul
-#define SIN47	530742520ul
-#define SIN48	3299628645ul
-#define SIN49	4096336452ul
-#define SIN50	1126891415ul
-#define SIN51	2878612391ul
-#define SIN52	4237533241ul
-#define SIN53	1700485571ul
-#define SIN54	2399980690ul
-#define SIN55	4293915773ul
-#define SIN56	2240044497ul
-#define SIN57	1873313359ul
-#define SIN58	4264355552ul
-#define SIN59	2734768916ul
-#define SIN60	1309151649ul
-#define SIN61	4149444226ul
-#define SIN62	3174756917ul
-#define SIN63	718787259ul
-#define SIN64	3951481745ul
+#define SIN1  3614090360ul
+#define SIN2  3905402710ul
+#define SIN3  606105819ul
+#define SIN4  3250441966ul
+#define SIN5  4118548399ul
+#define SIN6  1200080426ul
+#define SIN7  2821735955ul
+#define SIN8  4249261313ul
+#define SIN9  1770035416ul
+#define SIN10  2336552879ul
+#define SIN11  4294925233ul
+#define SIN12  2304563134ul
+#define SIN13  1804603682ul
+#define SIN14  4254626195ul
+#define SIN15  2792965006ul
+#define SIN16  1236535329ul
+#define SIN17  4129170786ul
+#define SIN18  3225465664ul
+#define SIN19  643717713ul
+#define SIN20  3921069994ul
+#define SIN21  3593408605ul
+#define SIN22  38016083ul
+#define SIN23  3634488961ul
+#define SIN24  3889429448ul
+#define SIN25  568446438ul
+#define SIN26  3275163606ul
+#define SIN27  4107603335ul
+#define SIN28  1163531501ul
+#define SIN29  2850285829ul
+#define SIN30  4243563512ul
+#define SIN31  1735328473ul
+#define SIN32  2368359562ul
+#define SIN33  4294588738ul
+#define SIN34  2272392833ul
+#define SIN35  1839030562ul
+#define SIN36  4259657740ul
+#define SIN37  2763975236ul
+#define SIN38  1272893353ul
+#define SIN39  4139469664ul
+#define SIN40  3200236656ul
+#define SIN41  681279174ul
+#define SIN42  3936430074ul
+#define SIN43  3572445317ul
+#define SIN44  76029189ul
+#define SIN45  3654602809ul
+#define SIN46  3873151461ul
+#define SIN47  530742520ul
+#define SIN48  3299628645ul
+#define SIN49  4096336452ul
+#define SIN50  1126891415ul
+#define SIN51  2878612391ul
+#define SIN52  4237533241ul
+#define SIN53  1700485571ul
+#define SIN54  2399980690ul
+#define SIN55  4293915773ul
+#define SIN56  2240044497ul
+#define SIN57  1873313359ul
+#define SIN58  4264355552ul
+#define SIN59  2734768916ul
+#define SIN60  1309151649ul
+#define SIN61  4149444226ul
+#define SIN62  3174756917ul
+#define SIN63  718787259ul
+#define SIN64  3951481745ul
 
 typedef struct {
-	size_t bufused;
-	uint64 nbits;
-	uint32 state[4];
-	uint8 buffer[64];
+  size_t bufused;
+  uint64 nbits;
+  uint32 state[4];
+  uint8 buffer[64];
 } md5_context;
 
 void md5_process(uint32 state[4], const byte block[64]) {
-	uint32 A = state[0], B = state[1], C = state[2], D = state[3];
-	ROUND(1, A, B, C, D, F1, 0, 7);		ROUND(2, D, A, B, C, F1, 1, 12);
-	ROUND(3, C, D, A, B, F1, 2, 17);	ROUND(4, B, C, D, A, F1, 3, 22);
-	ROUND(5, A, B, C, D, F1, 4, 7);		ROUND(6, D, A, B, C, F1, 5, 12);
-	ROUND(7, C, D, A, B, F1, 6, 17);	ROUND(8, B, C, D, A, F1, 7, 22);
-	ROUND(9, A, B, C, D, F1, 8, 7);		ROUND(10, D, A, B, C, F1, 9, 12);
-	ROUND(11, C, D, A, B, F1, 10, 17);	ROUND(12, B, C, D, A, F1, 11, 22);
-	ROUND(13, A, B, C, D, F1, 12, 7);	ROUND(14, D, A, B, C, F1, 13, 12);
-	ROUND(15, C, D, A, B, F1, 14, 17);	ROUND(16, B, C, D, A, F1, 15, 22);
-	ROUND(17, A, B, C, D, F2, 1, 5);	ROUND(18, D, A, B, C, F2, 6, 9);
-	ROUND(19, C, D, A, B, F2, 11, 14);	ROUND(20, B, C, D, A, F2, 0, 20);
-	ROUND(21, A, B, C, D, F2, 5, 5);	ROUND(22, D, A, B, C, F2, 10, 9);
-	ROUND(23, C, D, A, B, F2, 15, 14);	ROUND(24, B, C, D, A, F2, 4, 20);
-	ROUND(25, A, B, C, D, F2, 9, 5);	ROUND(26, D, A, B, C, F2, 14, 9);
-	ROUND(27, C, D, A, B, F2, 3, 14);	ROUND(28, B, C, D, A, F2, 8, 20);
-	ROUND(29, A, B, C, D, F2, 13, 5);	ROUND(30, D, A, B, C, F2, 2, 9);
-	ROUND(31, C, D, A, B, F2, 7, 14);	ROUND(32, B, C, D, A, F2, 12, 20);
-	ROUND(33, A, B, C, D, F3, 5, 4);	ROUND(34, D, A, B, C, F3, 8, 11);
-	ROUND(35, C, D, A, B, F3, 11, 16);	ROUND(36, B, C, D, A, F3, 14, 23);
-	ROUND(37, A, B, C, D, F3, 1, 4);	ROUND(38, D, A, B, C, F3, 4, 11);
-	ROUND(39, C, D, A, B, F3, 7, 16);	ROUND(40, B, C, D, A, F3, 10, 23);
-	ROUND(41, A, B, C, D, F3, 13, 4);	ROUND(42, D, A, B, C, F3, 0, 11);
-	ROUND(43, C, D, A, B, F3, 3, 16);	ROUND(44, B, C, D, A, F3, 6, 23);
-	ROUND(45, A, B, C, D, F3, 9, 4);	ROUND(46, D, A, B, C, F3, 12, 11);
-	ROUND(47, C, D, A, B, F3, 15, 16);	ROUND(48, B, C, D, A, F3, 2, 23);
-	ROUND(49, A, B, C, D, F4, 0, 6);	ROUND(50, D, A, B, C, F4, 7, 10);
-	ROUND(51, C, D, A, B, F4, 14, 15);	ROUND(52, B, C, D, A, F4, 5, 21);
-	ROUND(53, A, B, C, D, F4, 12, 6);	ROUND(54, D, A, B, C, F4, 3, 10);
-	ROUND(55, C, D, A, B, F4, 10, 15);	ROUND(56, B, C, D, A, F4, 1, 21);
-	ROUND(57, A, B, C, D, F4, 8, 6);	ROUND(58, D, A, B, C, F4, 15, 10);
-	ROUND(59, C, D, A, B, F4, 6, 15);	ROUND(60, B, C, D, A, F4, 13, 21);
-	ROUND(61, A, B, C, D, F4, 4, 6);	ROUND(62, D, A, B, C, F4, 11, 10);
-	ROUND(63, C, D, A, B, F4, 2, 15);	ROUND(64, B, C, D, A, F4, 9, 21);
-	state[0] += A; state[1] += B; state[2] += C; state[3] += D;
+  uint32 A = state[0], B = state[1], C = state[2], D = state[3];
+  ROUND(1, A, B, C, D, F1, 0, 7);    ROUND(2, D, A, B, C, F1, 1, 12);
+  ROUND(3, C, D, A, B, F1, 2, 17);  ROUND(4, B, C, D, A, F1, 3, 22);
+  ROUND(5, A, B, C, D, F1, 4, 7);    ROUND(6, D, A, B, C, F1, 5, 12);
+  ROUND(7, C, D, A, B, F1, 6, 17);  ROUND(8, B, C, D, A, F1, 7, 22);
+  ROUND(9, A, B, C, D, F1, 8, 7);    ROUND(10, D, A, B, C, F1, 9, 12);
+  ROUND(11, C, D, A, B, F1, 10, 17);  ROUND(12, B, C, D, A, F1, 11, 22);
+  ROUND(13, A, B, C, D, F1, 12, 7);  ROUND(14, D, A, B, C, F1, 13, 12);
+  ROUND(15, C, D, A, B, F1, 14, 17);  ROUND(16, B, C, D, A, F1, 15, 22);
+  ROUND(17, A, B, C, D, F2, 1, 5);  ROUND(18, D, A, B, C, F2, 6, 9);
+  ROUND(19, C, D, A, B, F2, 11, 14);  ROUND(20, B, C, D, A, F2, 0, 20);
+  ROUND(21, A, B, C, D, F2, 5, 5);  ROUND(22, D, A, B, C, F2, 10, 9);
+  ROUND(23, C, D, A, B, F2, 15, 14);  ROUND(24, B, C, D, A, F2, 4, 20);
+  ROUND(25, A, B, C, D, F2, 9, 5);  ROUND(26, D, A, B, C, F2, 14, 9);
+  ROUND(27, C, D, A, B, F2, 3, 14);  ROUND(28, B, C, D, A, F2, 8, 20);
+  ROUND(29, A, B, C, D, F2, 13, 5);  ROUND(30, D, A, B, C, F2, 2, 9);
+  ROUND(31, C, D, A, B, F2, 7, 14);  ROUND(32, B, C, D, A, F2, 12, 20);
+  ROUND(33, A, B, C, D, F3, 5, 4);  ROUND(34, D, A, B, C, F3, 8, 11);
+  ROUND(35, C, D, A, B, F3, 11, 16);  ROUND(36, B, C, D, A, F3, 14, 23);
+  ROUND(37, A, B, C, D, F3, 1, 4);  ROUND(38, D, A, B, C, F3, 4, 11);
+  ROUND(39, C, D, A, B, F3, 7, 16);  ROUND(40, B, C, D, A, F3, 10, 23);
+  ROUND(41, A, B, C, D, F3, 13, 4);  ROUND(42, D, A, B, C, F3, 0, 11);
+  ROUND(43, C, D, A, B, F3, 3, 16);  ROUND(44, B, C, D, A, F3, 6, 23);
+  ROUND(45, A, B, C, D, F3, 9, 4);  ROUND(46, D, A, B, C, F3, 12, 11);
+  ROUND(47, C, D, A, B, F3, 15, 16);  ROUND(48, B, C, D, A, F3, 2, 23);
+  ROUND(49, A, B, C, D, F4, 0, 6);  ROUND(50, D, A, B, C, F4, 7, 10);
+  ROUND(51, C, D, A, B, F4, 14, 15);  ROUND(52, B, C, D, A, F4, 5, 21);
+  ROUND(53, A, B, C, D, F4, 12, 6);  ROUND(54, D, A, B, C, F4, 3, 10);
+  ROUND(55, C, D, A, B, F4, 10, 15);  ROUND(56, B, C, D, A, F4, 1, 21);
+  ROUND(57, A, B, C, D, F4, 8, 6);  ROUND(58, D, A, B, C, F4, 15, 10);
+  ROUND(59, C, D, A, B, F4, 6, 15);  ROUND(60, B, C, D, A, F4, 13, 21);
+  ROUND(61, A, B, C, D, F4, 4, 6);  ROUND(62, D, A, B, C, F4, 11, 10);
+  ROUND(63, C, D, A, B, F4, 2, 15);  ROUND(64, B, C, D, A, F4, 9, 21);
+  state[0] += A; state[1] += B; state[2] += C; state[3] += D;
 }
 
 void md5_starts(md5_context *ctx) {
-	ctx->nbits = 0;
-	ctx->bufused = 0;
+  ctx->nbits = 0;
+  ctx->bufused = 0;
 
-	ctx->state[0] = 0x67452301;
-	ctx->state[1] = 0xefcdab89;
-	ctx->state[2] = 0x98badcfe;
-	ctx->state[3] = 0x10325476;
+  ctx->state[0] = 0x67452301;
+  ctx->state[1] = 0xefcdab89;
+  ctx->state[2] = 0x98badcfe;
+  ctx->state[3] = 0x10325476;
 }
 
 void md5_update(md5_context *ctx, uint8 *input, uint32 length) {
-	if (ctx->bufused != 0) {
-		size_t bufremain = 64 - ctx->bufused;
-		if (length < bufremain) {
-			memcpy(ctx->buffer + ctx->bufused, input, length);
-			ctx->bufused += length;
-			return;
-		}
-		else {
-			memcpy(ctx->buffer + ctx->bufused, input, bufremain);
-			md5_process(ctx->state, ctx->buffer);
-			length -= bufremain;
-			input = reinterpret_cast<uint8 *>(input) + bufremain;
-		}
-	}
-	while (length >= 64) {
-		md5_process(ctx->state, reinterpret_cast<uint8 *>(input));
-		length -= 64;
-		input = reinterpret_cast<uint8 *>(input) + 64;
-		ctx->nbits += 512;
-	}
-	if ((ctx->bufused = length) != 0) {
-		memcpy(ctx->buffer, input, length);
-	}
+  if (ctx->bufused != 0) {
+    size_t bufremain = 64 - ctx->bufused;
+    if (length < bufremain) {
+      memcpy(ctx->buffer + ctx->bufused, input, length);
+      ctx->bufused += length;
+      return;
+    }
+    else {
+      memcpy(ctx->buffer + ctx->bufused, input, bufremain);
+      md5_process(ctx->state, ctx->buffer);
+      length -= bufremain;
+      input = reinterpret_cast<uint8 *>(input) + bufremain;
+    }
+  }
+  while (length >= 64) {
+    md5_process(ctx->state, reinterpret_cast<uint8 *>(input));
+    length -= 64;
+    input = reinterpret_cast<uint8 *>(input) + 64;
+    ctx->nbits += 512;
+  }
+  if ((ctx->bufused = length) != 0) {
+    memcpy(ctx->buffer, input, length);
+  }
 }
 
 void md5_finish(md5_context *ctx, byte digest[16]) {
-	memcpy(digest, ctx->state, 16);
-	memset(ctx->buffer + ctx->bufused, 0, 64 - ctx->bufused);
-	ctx->buffer[ctx->bufused] = 0x80;
-	if (ctx->bufused < 56) {
-		reinterpret_cast<uint64 *>(ctx->buffer)[7] = ctx->nbits + ctx->bufused * 8;
-		md5_process(reinterpret_cast<uint32 *>(digest), ctx->buffer);
-	}
-	else {
-		byte extra[64];
-		md5_process(reinterpret_cast<uint32 *>(digest), ctx->buffer);
-		memset(extra, 0, 56);
-		reinterpret_cast<uint64 *>(extra)[7] = ctx->nbits + ctx->bufused * 8;
-		md5_process(reinterpret_cast<uint32 *>(digest), extra);
-	}
+  memcpy(digest, ctx->state, 16);
+  memset(ctx->buffer + ctx->bufused, 0, 64 - ctx->bufused);
+  ctx->buffer[ctx->bufused] = 0x80;
+  if (ctx->bufused < 56) {
+    reinterpret_cast<uint64 *>(ctx->buffer)[7] = ctx->nbits + ctx->bufused * 8;
+    md5_process(reinterpret_cast<uint32 *>(digest), ctx->buffer);
+  }
+  else {
+    byte extra[64];
+    md5_process(reinterpret_cast<uint32 *>(digest), ctx->buffer);
+    memset(extra, 0, 56);
+    reinterpret_cast<uint64 *>(extra)[7] = ctx->nbits + ctx->bufused * 8;
+    md5_process(reinterpret_cast<uint32 *>(digest), extra);
+  }
 }
 
 std::string md5_string(const std::string& input) {
-	std::string digest;
+  std::string digest;
 
-	md5_context ctx;
-	md5_starts(&ctx);
-	md5_update(&ctx, (uint8*)&input[0], input.size());
-	digest.resize(16);
-	md5_finish(&ctx, (uint8*)&digest[0]);
+  md5_context ctx;
+  md5_starts(&ctx);
+  md5_update(&ctx, (uint8*)&input[0], input.size());
+  digest.resize(16);
+  md5_finish(&ctx, (uint8*)&digest[0]);
 
-	return digest;
+  return digest;
 }
 
 std::string string_to_hex(const std::string& input) {
-	const static char hex_table[] = "0123456789abcdef";
-	std::string temp;
-	temp.resize(input.size() * 2);
-	std::string::size_type i;
-	std::string::const_iterator itr = input.begin();
-	for (i = 0; itr != input.end(); itr++, i++) {
-		temp[i++] = hex_table[(*itr & 0xF0) >> 4];
-		temp[i] = hex_table[*itr & 0x0F];
-	}
-	return temp;
+  const static char hex_table[] = "0123456789abcdef";
+  std::string temp;
+  temp.resize(input.size() * 2);
+  std::string::size_type i;
+  std::string::const_iterator itr = input.begin();
+  for (i = 0; itr != input.end(); itr++, i++) {
+    temp[i++] = hex_table[(*itr & 0xF0) >> 4];
+    temp[i] = hex_table[*itr & 0x0F];
+  }
+  return temp;
 }
 
 void set_priv(const char *chuser_name, const char *chroot_dir, const char *title) {
 #ifndef _WIN32
-	struct passwd *pw;
+  struct passwd *pw;
 
-	if (chuser_name[0] == '\0' || chroot_dir[0] == '\0')
-		return;
+  if (chuser_name[0] == '\0' || chroot_dir[0] == '\0')
+    return;
 
-	if ((pw = getpwnam(chuser_name)) == NULL) {
-		fprintf(stderr, "failed to get user \"%s\"\n", chuser_name);
-		fflush(stderr);
-		exit(255);
-	}
-	if (chroot(chroot_dir) != 0) {
-		fprintf(stderr, "can't chroot %s\n", chroot_dir);
-		fflush(stderr);
-		exit(255);
-	}
-	if (chdir("/") != 0) {
-		fprintf(stderr, "can't change directory '/'\n");
-		fflush(stderr);
-		exit(255);
-	}
+  if ((pw = getpwnam(chuser_name)) == NULL) {
+    fprintf(stderr, "failed to get user \"%s\"\n", chuser_name);
+    fflush(stderr);
+    exit(255);
+  }
+  if (chroot(chroot_dir) != 0) {
+    fprintf(stderr, "can't chroot %s\n", chroot_dir);
+    fflush(stderr);
+    exit(255);
+  }
+  if (chdir("/") != 0) {
+    fprintf(stderr, "can't change directory '/'\n");
+    fflush(stderr);
+    exit(255);
+  }
 
 #ifdef HAVE_SETPROCTITLE
-	if (title != NULL)
-		setproctitle("%s [%s]", pw->pw_name, title);
+  if (title != NULL)
+    setproctitle("%s [%s]", pw->pw_name, title);
 #endif
 
-	/*
-	 * Drop privileges and clear the group access list
-	 */
-	if (setgroups(1, &pw->pw_gid) == -1 ||
+  /*
+   * Drop privileges and clear the group access list
+   */
+  if (setgroups(1, &pw->pw_gid) == -1 ||
 #if defined(HAVE_SETRESUID) && !defined(BROKEN_SETRESUID)
-	    setresgid(pw->pw_gid, pw->pw_gid, pw->pw_gid) == -1 ||
-	    setresuid(pw->pw_uid, pw->pw_uid, pw->pw_uid) == -1
+      setresgid(pw->pw_gid, pw->pw_gid, pw->pw_gid) == -1 ||
+      setresuid(pw->pw_uid, pw->pw_uid, pw->pw_uid) == -1
 #elif defined(HAVE_SETREUID) && !defined(BROKEN_SETREUID)
-	    setregid(pw->pw_gid, pw->pw_gid, pw->pw_gid) == -1 ||
-	    setreuid(pw->pw_uid, pw->pw_uid, pw->pw_uid) == -1
+      setregid(pw->pw_gid, pw->pw_gid, pw->pw_gid) == -1 ||
+      setreuid(pw->pw_uid, pw->pw_uid, pw->pw_uid) == -1
 #else
 # ifndef SETEUID_BREAKS_SETUID
-	    setegid(pw->pw_gid) == -1 ||
-	    seteuid(pw->pw_uid) == -1
+      setegid(pw->pw_gid) == -1 ||
+      seteuid(pw->pw_uid) == -1
 # else
-	    setgid(pw->pw_gid) == -1 ||
-	    setuid(pw->pw_uid) == -1
+      setgid(pw->pw_gid) == -1 ||
+      setuid(pw->pw_uid) == -1
 # endif
 #endif
-	   ) {
-		fprintf(stderr, "can't drop privileges\n");
-		fflush(stderr);
-		exit(255);
-	}
+     ) {
+    fprintf(stderr, "can't drop privileges\n");
+    fflush(stderr);
+    exit(255);
+  }
 #else
-	fprintf(stderr, "win32 does not support set_priv()\n");
-	fflush(stderr);
-	exit(255);
+  fprintf(stderr, "win32 does not support set_priv()\n");
+  fflush(stderr);
+  exit(255);
 #endif
 }
 
