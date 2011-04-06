@@ -113,6 +113,9 @@ static void signal_handler(int num) {
     stopping = true;
     httpd.stop();
   }
+#ifdef _WIN32
+  WSACleanup();
+#endif
 }
 
 int main(int argc, char* argv[]) {
