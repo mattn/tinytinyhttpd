@@ -1030,12 +1030,12 @@ static void res_close(RES_INFO* res_info) {
 
 #endif
 
-static void get_line(int fd, std::string s) {
+static bool get_line(int fd, std::string& s) {
   char c = 0;
   std::stringstream ss;
   while (1) {
     if (recv(fd, &c, 1, 0) <= 0)
-      break;
+      return false;
     if (c == '\r')
       continue;
     if (c == '\n')
@@ -1043,6 +1043,7 @@ static void get_line(int fd, std::string s) {
     ss << c;
   }
   s = ss.str();
+  return true;
 }
 
 void* response_thread(void* param) {
@@ -1081,21 +1082,19 @@ request_top:
   content_length = 0;
   vauth.clear();
 
-  get_line(msgsock, req);
-  if (req.size() == 0) {
+  if (!get_line(msgsock, req) || req.empty())
     goto request_end;
-  }
   if (VERBOSE(1)) printf("* %s\n", req.c_str());
 
   do {
-    get_line(msgsock, str);
-    if (str.empty()) break;
+    if (!get_line(msgsock, str))
+      goto request_end;
+    if (str.empty())
+      break;
     const char *ptr = str.c_str();
-    if (VERBOSE(2)) printf("  %s\n", ptr);
 
-    if (!strnicmp(ptr, "SERVER_", 7) || !strnicmp(ptr, "REMOTE_", 7)) {
+    if (!strnicmp(ptr, "SERVER_", 7) || !strnicmp(ptr, "REMOTE_", 7))
       continue;
-    }
     char* stp = (char*)strchr(ptr, ':');
     if (stp) {
       *stp = 0;
@@ -1107,6 +1106,12 @@ request_top:
       http_headers[key] = val;
     }
   } while (true);
+
+  if (VERBOSE(2)) {
+    server::HttpHeader::const_iterator it;
+    for (it = http_headers.begin(); it != http_headers.end(); it++)
+      printf("  %s=%s\n", it->first.c_str(), it->second.c_str());
+  }
 
   if (http_headers.count("CONNECTION")
       && !stricmp(http_headers["CONNECTION"].c_str(), "keep-alive"))
@@ -1122,7 +1127,8 @@ request_top:
   split_string(req, " ", vparam);
   try {
     if (httpd->accept_ips.size() > 0 &&
-        std::find(httpd->accept_ips.begin(), httpd->accept_ips.end(), address) == httpd->accept_ips.end()) {
+        std::find(httpd->accept_ips.begin(), httpd->accept_ips.end(), address)
+          == httpd->accept_ips.end()) {
       res_code = "403";
       res_msg = "Forbidden";
       res_body = "Forbidden";
@@ -1159,7 +1165,8 @@ request_top:
         }
 
         server::RequestAliases::iterator it_alias;
-        for(it_alias = httpd->request_aliases.begin(); it_alias != httpd->request_aliases.end(); it_alias++) {
+        for(it_alias = httpd->request_aliases.begin();
+                it_alias != httpd->request_aliases.end(); it_alias++) {
           if (path_info == it_alias->first) {
             vparam[1] = it_alias->second;
             break;
