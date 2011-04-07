@@ -597,15 +597,15 @@ static std::string res_ftime(std::string& file, int diff = 0) {
 }
 
 static std::string res_fgets(RES_INFO* res_info) {
-  std::string ret;
-  while(true) {
+  char c;
+  std::stringstream ss;
+  while (1) {
     DWORD dwRead;
-    char buf[2] = {0};
-    if (ReadFile(res_info->read, buf, 1, &dwRead, NULL) == FALSE) break;
-    if (buf[0] == '\n') break;
-    if (buf[0] != '\r') ret += buf;
+    if (ReadFile(res_info->read, &c, 1, &dwRead, NULL) == FALSE) break;
+    if (c == '\n') break;
+    if (c != '\r') ss << c;
   }
-  return ret;
+  return ss.str();
 }
 
 static unsigned long res_write(RES_INFO* res_info, char* data, unsigned long size) {
@@ -898,14 +898,14 @@ static std::string res_ftime(std::string& file, int diff = 0) {
 }
 
 static std::string res_fgets(RES_INFO* res_info) {
-  std::string ret;
-  while(true) {
-    char buf[2] = {0};
-    if (read(res_info->read, buf, 1) != 1) break;
-    if (buf[0] == '\n') break;
-    if (buf[0] != '\r') ret += buf;
+  std::stringstream ss;
+  char c;
+  while (1) {
+    if (read(res_info->read, &c, 1) != 1) break;
+    if (c == '\n') break;
+    if (c != '\r') ss << c;
   }
-  return ret;
+  return ss.str();
 }
 
 static unsigned long res_write(RES_INFO* res_info, char* data, unsigned long size) {
@@ -1030,12 +1030,9 @@ static void res_close(RES_INFO* res_info) {
 
 #endif
 
-static std::string get_line(int fd)
-{
+static void get_line(int fd, std::string s) {
   char c = 0;
-  char add[2] = {0};
-  std::string  ret;
-  ret.reserve(80);
+  std::stringstream ss;
   while (1) {
     if (recv(fd, &c, 1, 0) <= 0)
       break;
@@ -1043,14 +1040,12 @@ static std::string get_line(int fd)
       continue;
     if (c == '\n')
       break;
-    add[0] = c;
-    ret += add;
+    ss << c;
   }
-  return ret;
+  s = ss.str();
 }
 
-void* response_thread(void* param)
-{
+void* response_thread(void* param) {
   server::HttpdInfo *pHttpdInfo = (server::HttpdInfo*)param;
   server *httpd = pHttpdInfo->httpd;
   int msgsock = (int)pHttpdInfo->msgsock;
@@ -1086,25 +1081,18 @@ request_top:
   content_length = 0;
   vauth.clear();
 
-  req = get_line(msgsock);
+  get_line(msgsock, req);
   if (req.size() == 0) {
     goto request_end;
   }
   if (VERBOSE(1)) printf("* %s\n", req.c_str());
 
   do {
-    str = get_line(msgsock);
+    get_line(msgsock, str);
     if (str.empty()) break;
-    const char *key, *ptr = str.c_str();
-    size_t len;
+    const char *ptr = str.c_str();
     if (VERBOSE(2)) printf("  %s\n", ptr);
 
-    key = "content-length:";
-    len = strlen(key);
-    if (!strnicmp(ptr, key, len)) {
-      content_length = atol(ptr + len);
-      continue;
-    }
     if (!strnicmp(ptr, "SERVER_", 7) || !strnicmp(ptr, "REMOTE_", 7)) {
       continue;
     }
@@ -1123,6 +1111,9 @@ request_top:
   if (http_headers.count("CONNECTION")
       && !stricmp(http_headers["CONNECTION"].c_str(), "keep-alive"))
     keep_alive = true;
+
+  if (http_headers.count("CONTENT_LENGTH"))
+    content_length = atol(http_headers["CONTENT_LENGTH"].c_str());
 
   if (httpd->loggerfunc) {
     httpd->loggerfunc(pHttpdInfo, req);
@@ -1785,7 +1776,7 @@ request_done:
 #ifdef _WIN32
           Sleep(1);
 #else
-          usleep(100);
+          usleep(10);
 #endif
         }
       }
