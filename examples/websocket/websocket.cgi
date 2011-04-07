@@ -5,8 +5,11 @@ use warnings;
 use File::Basename;
 use Filesys::Notify::Simple;
 use JSON;
+use Fcntl;
 use Time::Piece;
 use Digest::MD5 qw(md5);
+
+$ENV{HTTP_UPGRADE} or die $@;
 
 my $file = dirname(__FILE__).'/websocket.log';
 
@@ -80,8 +83,9 @@ if ($pid) {
   local $/ = "\xff";
   while (<STDIN>) {
     open my $fh, '>>', $file;
+    flock($fh, 2);
     binmode $fh;
-    my $json = to_json { message => substr($_, 1, -1), time => Time::Piece::localtime()->datetime };
+    my $json = to_json { message => substr($_, 1, -1), time => Time::Piece::localtime()->datetime(T => ' ') };
     print $fh "$json\n";
     close $fh;
   }
