@@ -1719,14 +1719,13 @@ request_top:
           type = "@";
         } else {
           if (!res_iscgi(path, path_info, script_name, httpd->mime_types, type)) {
-            for(it_mime = httpd->mime_types.begin(); it_mime != httpd->mime_types.end(); it_mime++) {
-              std::string match = ".";
-              match += it_mime->first;
-              if (match_suffix(path, match)) {
+            size_t sep_pos = path.find_last_of("./");
+            if (sep_pos != std::string::npos && path[sep_pos] == '.') {
+              it_mime = httpd->mime_types.find(path.substr(sep_pos + 1));
+              if (it_mime != httpd->mime_types.end()) {
                 type = it_mime->second;
                 res_type = type;
               }
-              if (!type.empty()) break;
             }
           }
         }
