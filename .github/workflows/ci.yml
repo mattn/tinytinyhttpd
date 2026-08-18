@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [g++, clang++]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf automake
+      - name: Build
+        run: |
+          ./autogen.sh
+          ./configure CXX=${{ matrix.compiler }}
+          make
+      - name: Smoke test
+        run: bash t/smoke.sh ./tthttpd
