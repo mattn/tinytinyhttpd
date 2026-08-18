@@ -1244,12 +1244,17 @@ static void parse_cgi_response_header(server* httpd, int msgsock,
 static void send_response_content(server* httpd, int msgsock, RES_INFO* res_info) {
   char buf[BUFSIZ];
   unsigned long total = res_info->size;
-  int sent = 0;
   if (total != (unsigned long) -1) {
 #if defined LINUX_SENDFILE_API
-    sent = sendfile(msgsock, res_info->read, NULL, total);
+    /* sendfile may send fewer bytes than requested; it advances the
+     * file offset, so unsent bytes fall through to the generic loop. */
+    while (total > 0) {
+      ssize_t sent = sendfile(msgsock, res_info->read, NULL, total);
+      if (sent <= 0) break;
+      total -= sent;
+    }
 #elif defined FREEBSD_SENDFILE_API
-    if (sendfile(msgsock, res_info->read, NULL, total, NULL, NULL, 0) == 0) sent = total;
+    if (sendfile(msgsock, res_info->read, NULL, total, NULL, NULL, 0) == 0) total = 0;
 #elif defined _WIN32
     if (!res_info->process && lpfnTransmitFile && lpfnTransmitFile(
       msgsock,
@@ -1258,21 +1263,21 @@ static void send_response_content(server* httpd, int msgsock, RES_INFO* res_info
       0,
       NULL,
       NULL,
-      TF_WRITE_BEHIND)) sent = total;
+      TF_WRITE_BEHIND)) total = 0;
 #endif
+    if (total == 0) return;
   }
-  if (sent <= 0) {
-    if (VERBOSE(1)) printf("* transfer file using default function\n");
-    unsigned int fd = (unsigned int) msgsock;
+  if (VERBOSE(1)) printf("* transfer file using default function\n");
+  {
     fd_set fdset;
     FD_ZERO(&fdset);
     struct timeval tv;
-    tv.tv_sec = 0;
-    tv.tv_usec = 0;
     while(total != 0) {
       if (res_info->write) {
-        FD_SET(fd, &fdset);
-        int r = select(FD_SETSIZE, &fdset, NULL, NULL, &tv);
+        FD_SET(msgsock, &fdset);
+        tv.tv_sec = 0;
+        tv.tv_usec = 0;
+        int r = select(msgsock + 1, &fdset, NULL, NULL, &tv);
         if (r < 0) break;
         if (r > 0 && FD_ISSET(msgsock, &fdset)) {
           int nrecv = recv(msgsock, buf, sizeof(buf), 0);
