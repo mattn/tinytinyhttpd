@@ -378,7 +378,12 @@ static bool match_suffix(const std::string& str, const std::string& suffix) {
 
 static std::string res_curtime(int diff = 0) {
   time_t tt = time(NULL) + diff;
+#ifdef _WIN32
   struct tm* p = gmtime(&tt);
+#else
+  struct tm tmbuf;
+  struct tm* p = gmtime_r(&tt, &tmbuf);
+#endif
 
   char buf[256];
   sprintf(buf, "%s, %02d %s %04d %02d:%02d:%02d GMT",
@@ -856,7 +861,7 @@ static std::vector<server::ListInfo> res_flist(std::string& path) {
       struct stat statbuf = {0};
       stat(file.c_str(), &statbuf);
       listInfo.size = statbuf.st_size;
-      memcpy(&listInfo.date, gmtime(&statbuf.st_mtime), sizeof(struct tm));
+      gmtime_r(&statbuf.st_mtime, &listInfo.date);
       listInfo.isdir = res_isdir(file);
       ret.push_back(listInfo);
     }
@@ -876,7 +881,8 @@ static std::string res_ftime(std::string& file, int diff = 0) {
   struct stat statbuf = {0};
   stat(file.c_str(), &statbuf);
   time_t tt = statbuf.st_mtime + diff;
-  struct tm* p=gmtime(&tt);
+  struct tm tmbuf;
+  struct tm* p = gmtime_r(&tt, &tmbuf);
   //int  offset;
   //int offset= -(int)timezone;
   //offset = offset/60/60*100 + (offset/60)%60;
