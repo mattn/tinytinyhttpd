@@ -1132,6 +1132,149 @@ static bool read_request_headers(int msgsock, server::HttpHeader& http_headers) 
   return true;
 }
 
+/* read the header block a CGI wrote to its stdout, folding it into the
+ * response status/header state. */
+static void parse_cgi_response_header(server* httpd, int msgsock,
+    RES_INFO* res_info, std::string& res_proto, std::string& res_code,
+    std::string& res_msg, std::string& res_head, bool& keep_alive) {
+  bool res_keep_alive = false;
+  res_head.clear();
+
+  do {
+    std::string str = res_fgets(res_info);
+    if (str.empty()) break;
+    const char *key, *ptr = str.c_str();
+    size_t len;
+    if (str[0] == '<') {
+      // workaround for broken non-header response.
+      send(msgsock, ptr, strlen(ptr), 0);
+      res_code.clear();
+      break;
+    }
+    if (VERBOSE(2)) printf("  %s\n", ptr);
+    if (res_head.empty()) {
+      if (!strnicmp(ptr, "HTTP/1.", 7)) {
+        char* tmp1;
+        char* tmp2;
+
+        tmp1 = (char*) strchr(ptr, ' ');
+        if (tmp1) {
+          *tmp1 = 0;
+          res_proto = ptr;
+          tmp2 = strchr(tmp1 + 1, ' ');
+          if (tmp2) {
+            *tmp2 = 0;
+            res_code = tmp1 + 1;
+            res_msg = tmp2 + 1;
+          } else {
+            res_code = tmp1 + 1;
+          }
+        }
+        continue;
+      }
+    }
+    key = "connection:";
+    len = strlen(key);
+    if (!strnicmp(ptr, key, len)) {
+      if (!stricmp(trim_string(ptr + len).c_str(), "keep-alive"))
+        res_keep_alive = true;
+    }
+    key = "WWW-Authenticate: Basic ";
+    len = strlen(key);
+    if (!strnicmp(ptr, key, len)) {
+      res_code = "401";
+      res_msg = "Unauthorized";
+    }
+    key = "Status:";
+    len = strlen(key);
+    if (!strnicmp(ptr, key, len)) {
+      std::vector<std::string> codes;
+      split_string(trim_string(str.substr(len)), " ", codes);
+      if (codes.size())
+        res_code = codes[0];
+      else
+        res_code = "";
+    }
+    key = "Content-Length:";
+    len = strlen(key);
+    if (!strnicmp(ptr, key, len)) {
+      res_info->size = (unsigned long)atol(str.substr(len).c_str());
+    }
+    res_head += ptr;
+    res_head += "\r\n";
+  } while (true);
+  if (!res_keep_alive) {
+    keep_alive = false;
+    res_head += "Connection: close\r\n";
+  }
+}
+
+/* stream the response body from a file or CGI pipe to the client,
+ * preferring the platform sendfile API when the size is known. */
+static void send_response_content(server* httpd, int msgsock, RES_INFO* res_info) {
+  char buf[BUFSIZ];
+  unsigned long total = res_info->size;
+  int sent = 0;
+  if (total != (unsigned long) -1) {
+#if defined LINUX_SENDFILE_API
+    sent = sendfile(msgsock, res_info->read, NULL, total);
+#elif defined FREEBSD_SENDFILE_API
+    if (sendfile(msgsock, res_info->read, NULL, total, NULL, NULL, 0) == 0) sent = total;
+#elif defined _WIN32
+    if (!res_info->process && lpfnTransmitFile && lpfnTransmitFile(
+      msgsock,
+      res_info->read,
+      total,
+      0,
+      NULL,
+      NULL,
+      TF_WRITE_BEHIND)) sent = total;
+#endif
+  }
+  if (sent <= 0) {
+    if (VERBOSE(1)) printf("* transfer file using default function\n");
+    unsigned int fd = (unsigned int) msgsock;
+    fd_set fdset;
+    FD_ZERO(&fdset);
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;
+    while(total != 0) {
+      if (res_info->write) {
+        FD_SET(fd, &fdset);
+        int r = select(FD_SETSIZE, &fdset, NULL, NULL, &tv);
+        if (r < 0) break;
+        if (r > 0 && FD_ISSET(msgsock, &fdset)) {
+          int nrecv = recv(msgsock, buf, sizeof(buf), 0);
+          if (nrecv > 0) {
+            res_write(res_info, buf, nrecv);
+          }
+        }
+      }
+      long long res = res_read(res_info, buf, sizeof(buf));
+      if (res < 0) break;
+      if (res > 0) {
+        if (VERBOSE(3))
+#ifdef _WIN32
+          printf("  reading part %I64d bytes\n", res);
+#else
+          printf("  reading part %lld bytes\n", res);
+#endif
+        send(msgsock, buf, res, 0);
+        if (total > 0) {
+          total -= res;
+        }
+      } else {
+#ifdef _WIN32
+        Sleep(1);
+#else
+        usleep(10);
+#endif
+      }
+    }
+  }
+}
+
 /* build the argument list and CGI/1.1 environment for a CGI request. */
 static void setup_cgi_args_env(server* httpd, int servno,
     const std::string& address, const std::string& port,
@@ -1694,77 +1837,8 @@ request_done:
   }
 
   if (res_info && res_info->process) {
-    bool res_keep_alive = false;
-    res_head.clear();
-
-    do {
-      memset(buf, 0, sizeof(buf));
-      str = res_fgets(res_info);
-      if (str.empty()) break;
-      const char *key, *ptr = str.c_str();
-      size_t len;
-      if (str[0] == '<') {
-        // workaround for broken non-header response.
-        send(msgsock, ptr, strlen(ptr), 0);
-        res_code.clear();
-        break;
-      }
-      if (VERBOSE(2)) printf("  %s\n", ptr);
-      if (res_head.empty()) {
-        if (!strnicmp(ptr, "HTTP/1.", 7)) {
-          char* tmp1;
-          char* tmp2;
-
-          tmp1 = (char*) strchr(ptr, ' ');
-          if (tmp1) {
-            *tmp1 = 0;
-            res_proto = ptr;
-            tmp2 = strchr(tmp1 + 1, ' ');
-            if (tmp2) {
-              *tmp2 = 0;
-              res_code = tmp1 + 1;
-              res_msg = tmp2 + 1;
-            } else {
-              res_code = tmp1 + 1;
-            }
-          }
-          continue;
-        }
-      }
-      key = "connection:";
-      len = strlen(key);
-      if (!strnicmp(ptr, key, len)) {
-        if (!stricmp(trim_string(ptr + len).c_str(), "keep-alive"))
-          res_keep_alive = true;
-      }
-      key = "WWW-Authenticate: Basic ";
-      len = strlen(key);
-      if (!strnicmp(ptr, key, len)) {
-        res_code = "401";
-        res_msg = "Unauthorized";
-      }
-      key = "Status:";
-      len = strlen(key);
-      if (!strnicmp(ptr, key, len)) {
-        std::vector<std::string> codes;
-        split_string(trim_string(str.substr(len)), " ", codes);
-        if (codes.size())
-          res_code = codes[0];
-        else
-          res_code = "";
-      }
-      key = "Content-Length:";
-      len = strlen(key);
-      if (!strnicmp(ptr, key, len)) {
-        res_info->size = (unsigned long)atol(str.substr(len).c_str());
-      }
-      res_head += ptr;
-      res_head += "\r\n";
-    } while (true);
-    if (!res_keep_alive) {
-      keep_alive = false;
-      res_head += "Connection: close\r\n";
-    }
+    parse_cgi_response_header(httpd, msgsock, res_info,
+      res_proto, res_code, res_msg, res_head, keep_alive);
   }
 
   if (!res_code.empty()) {
@@ -1782,68 +1856,7 @@ request_done:
 
   if (res_info) {
     send(msgsock, "\r\n", 2, 0);
-    unsigned long total = res_info->size;
-    int sent = 0;
-    if (total != (unsigned long) -1) {
-#if defined LINUX_SENDFILE_API
-      sent = sendfile(msgsock, res_info->read, NULL, total);
-#elif defined FREEBSD_SENDFILE_API
-      if (sendfile(msgsock, res_info->read, NULL, total, NULL, NULL, 0) == 0) sent = total;
-#elif defined _WIN32
-      if (!res_info->process && lpfnTransmitFile && lpfnTransmitFile(
-        msgsock,
-        res_info->read,
-        total,
-        0,
-        NULL,
-        NULL,
-        TF_WRITE_BEHIND)) sent = total;
-#endif
-    }
-    if (sent <= 0) {
-      if (VERBOSE(1)) printf("* transfer file using default function\n");
-      unsigned int fd = (unsigned int) msgsock;
-      fd_set fdset;
-      FD_ZERO(&fdset);
-      struct timeval tv;
-      tv.tv_sec = 0;
-      tv.tv_usec = 0;
-      while(total != 0) {
-        if (res_info->write) {
-          FD_SET(fd, &fdset);
-          int r = select(FD_SETSIZE, &fdset, NULL, NULL, &tv);
-          if (r < 0) break;
-          if (r > 0 && FD_ISSET(msgsock, &fdset)) {
-            memset(buf, 0, sizeof(buf));
-            int read = recv(msgsock, buf, sizeof(buf), 0);
-            if (read > 0) {
-              res_write(res_info, buf, read);
-            }
-          }
-        }
-        memset(buf, 0, sizeof(buf));
-        long long res = res_read(res_info, buf, sizeof(buf));
-        if (res < 0) break;
-        if (res > 0) {
-          if (VERBOSE(3))
-#ifdef _WIN32
-            printf("  reading part %I64d bytes\n", res);
-#else
-            printf("  reading part %lld bytes\n", res);
-#endif
-          send(msgsock, buf, res, 0);
-          if (total > 0) {
-            total -= res;
-          }
-        } else {
-#ifdef _WIN32
-          Sleep(1);
-#else
-          usleep(10);
-#endif
-        }
-      }
-    }
+    send_response_content(httpd, msgsock, res_info);
     res_close(res_info);
     res_info = NULL;
   } else
