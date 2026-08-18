@@ -38,6 +38,9 @@
 #include <process.h>
 #include <direct.h>
 #include <io.h>
+/* Sleep() takes milliseconds. round up so that sub-millisecond waits
+ * still yield the cpu. */
+#define usleep(usec) Sleep(((usec) + 999) / 1000)
 #else
 #include <sys/types.h>
 #include <sys/socket.h>

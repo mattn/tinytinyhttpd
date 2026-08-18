@@ -360,7 +360,7 @@ static bool filetime2unixtime(const FILETIME* ft, struct tm* tm) {
 
     if (!FileTimeToLocalFileTime(ft, &lt)) return false;
     if (!FileTimeToSystemTime(&lt, &st)) return false;
-    memset(tm, 0, sizeof(tm));
+    memset(tm, 0, sizeof(*tm));
     tm->tm_year = st.wYear - 1900;
     tm->tm_mon = st.wMonth - 1;
     tm->tm_mday = st.wDay;
@@ -644,7 +644,6 @@ static long long res_read(RES_INFO* res_info, char* data, unsigned long size) {
 
 static RES_INFO* res_popen(std::vector<std::string>& args, std::vector<std::string>& envs) {
   int envs_len = 1;
-  int n;
   char *envs_ptr;
   char *ptr;
   std::vector<std::string>::const_iterator it;
@@ -700,7 +699,7 @@ static RES_INFO* res_popen(std::vector<std::string>& args, std::vector<std::stri
   si.hStdOutput = hClientOut_wr;
   si.hStdError  = hClientOut_wr;
 
-  for(it = args.begin(), n = 0; it != args.end(); it++, n++) {
+  for(it = args.begin(); it != args.end(); it++) {
     if (it != args.begin()) command += " ";
     command += *it;
   }
@@ -1290,21 +1289,13 @@ static void send_response_content(server* httpd, int msgsock, RES_INFO* res_info
       if (res < 0) break;
       if (res > 0) {
         if (VERBOSE(3))
-#ifdef _WIN32
-          printf("  reading part %I64d bytes\n", res);
-#else
-          printf("  reading part %lld bytes\n", res);
-#endif
+          printf("  reading part %lld bytes\n", (long long)res);
         send(msgsock, buf, res, 0);
         if (total > 0) {
           total -= res;
         }
       } else {
-#ifdef _WIN32
-        Sleep(1);
-#else
         usleep(10);
-#endif
       }
     }
   }
