@@ -1055,6 +1055,57 @@ static bool get_line(int fd, std::string& s) {
   return true;
 }
 
+static std::string build_directory_listing(const std::string& script_name, std::string& path) {
+  char buf[256];
+  std::string res_body;
+
+  res_body = "<html><head><title>";
+  res_body += script_name;
+  res_body += "</title></head><body><h1>";
+  res_body += script_name;
+  res_body += "</h1><hr /><pre>";
+  res_body += "<table border=0>";
+  std::vector<server::ListInfo> flist = res_flist(path);
+  std::vector<server::ListInfo>::iterator it;
+
+  // TODO: sort and reverse, sort key
+  //std::map<std::string, std::string> params = tthttpd::parse_querystring(query_string);
+
+  for(it = flist.begin(); it != flist.end(); it++) {
+    std::string name = it->name;
+    res_body += "<tr><td><a href=\"";
+    res_body += tthttpd::url_encode(name);
+    res_body += "\">";
+    res_body += tthttpd::html_encode(name);
+    res_body += "</a></td>";
+    res_body += "<td>";
+    struct tm tm = it->date;
+    sprintf(buf, "%02d-%s-%04d %02d:%02d",
+      tm.tm_mday,
+      months[tm.tm_mon],
+      tm.tm_year+1900,
+      tm.tm_hour,
+      tm.tm_min);
+    res_body += buf;
+    res_body += "</td>";
+    res_body += "<td align=right>&nbsp;&nbsp;";
+    if (!it->isdir) {
+      if (it->size < 1000)
+        sprintf(buf, "%d", (int)it->size);
+      else
+      if (it->size < 1000000)
+        sprintf(buf, "%dK", (int)it->size/1000);
+      else
+        sprintf(buf, "%.1dM", (int)it->size/1000000);
+      res_body += buf;
+    } else
+      res_body += "[DIR]";
+    res_body += "</td></tr>";
+  }
+  res_body += "</table></pre ><hr /></body></html>";
+  return res_body;
+}
+
 /* read header lines until the empty line that ends the request header.
  * returns false when the peer disconnected mid-header. */
 static bool read_request_headers(int msgsock, server::HttpHeader& http_headers) {
@@ -1340,50 +1391,7 @@ request_top:
             res_type += "; charset=";
             res_type += trim_string(httpd->fs_charset);
           }
-          res_body = "<html><head><title>";
-          res_body += script_name;
-          res_body += "</title></head><body><h1>";
-          res_body += script_name;
-          res_body += "</h1><hr /><pre>";
-          res_body += "<table border=0>";
-          std::vector<server::ListInfo> flist = res_flist(path);
-          std::vector<server::ListInfo>::iterator it;
-
-          // TODO: sort and reverse, sort key
-          //std::map<std::string, std::string> params = tthttpd::parse_querystring(query_string);
-
-          for(it = flist.begin(); it != flist.end(); it++) {
-            std::string name = it->name;
-            res_body += "<tr><td><a href=\"";
-            res_body += tthttpd::url_encode(name);
-            res_body += "\">";
-            res_body += tthttpd::html_encode(name);
-            res_body += "</a></td>";
-            res_body += "<td>";
-            struct tm tm = it->date;
-            sprintf(buf, "%02d-%s-%04d %02d:%02d",
-              tm.tm_mday,
-              months[tm.tm_mon],
-              tm.tm_year+1900,
-              tm.tm_hour,
-              tm.tm_min);
-            res_body += buf;
-            res_body += "</td>";
-            res_body += "<td align=right>&nbsp;&nbsp;";
-            if (!it->isdir) {
-              if (it->size < 1000)
-                sprintf(buf, "%d", (int)it->size);
-              else
-              if (it->size < 1000000)
-                sprintf(buf, "%dK", (int)it->size/1000);
-              else
-                sprintf(buf, "%.1dM", (int)it->size/1000000);
-              res_body += buf;
-            } else
-              res_body += "[DIR]";
-            res_body += "</td></tr>";
-          }
-          res_body += "</table></pre ><hr /></body></html>";
+          res_body = build_directory_listing(script_name, path);
           goto request_done;
         }
 
