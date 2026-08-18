@@ -1991,16 +1991,16 @@ void* watch_thread(void* param)
     for(fds = 0; fds < nserver; fds++) {
       int sock = httpd->socks[fds];
 
-      if (!FD_ISSET(sock, &fdset[fds]))
+      if (!FD_ISSET(sock, fdset))
         continue;
 
       memset(&client, 0, sizeof(client));
+      client_len = sizeof(client);
       msgsock = accept(sock, (struct sockaddr *)&client, (socklen_t *)&client_len);
       if (VERBOSE(3)) printf("* accepted socket %d\n", msgsock);
       if (msgsock == -1) {
         if (errno != EINTR && errno != EWOULDBLOCK)
           if (VERBOSE(1)) my_perror("accept");
-        closesocket(msgsock);
         break;
       } else {
         if (httpd->family == AF_INET) {
@@ -2045,7 +2045,7 @@ void* watch_thread(void* param)
     }
   }
 
-  delete[] fdset;
+  free(fdset);
 
 #if defined(_WIN32) && !defined(USE_PTHREAD)
   _endthread();
