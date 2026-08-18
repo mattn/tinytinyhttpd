@@ -1039,20 +1039,50 @@ static void res_close(RES_INFO* res_info) {
 
 #endif
 
-static bool get_line(int fd, std::string& s) {
-  char c = 0;
-  std::stringstream ss;
+/* buffered reader for the request socket. reading ahead may buffer part
+ * of the request body (or a pipelined request), so all reads from the
+ * socket must go through body_read()/get_line() on the same reader. */
+typedef struct {
+  int fd;
+  char buf[BUFSIZ];
+  int len;
+  int pos;
+} LineReader;
+
+static void line_reader_init(LineReader& reader, int fd) {
+  reader.fd = fd;
+  reader.len = 0;
+  reader.pos = 0;
+}
+
+static bool get_line(LineReader& reader, std::string& s) {
+  s.clear();
   while (1) {
-    if (recv(fd, &c, 1, 0) <= 0)
-      return false;
+    if (reader.pos >= reader.len) {
+      reader.len = recv(reader.fd, reader.buf, sizeof(reader.buf), 0);
+      reader.pos = 0;
+      if (reader.len <= 0)
+        return false;
+    }
+    char c = reader.buf[reader.pos++];
     if (c == '\r')
       continue;
     if (c == '\n')
       break;
-    ss << c;
+    s += c;
   }
-  s = ss.str();
   return true;
+}
+
+static int body_read(LineReader& reader, char* data, unsigned long size) {
+  if (reader.pos < reader.len) {
+    unsigned long n = reader.len - reader.pos;
+    if (n > size) n = size;
+    memcpy(data, reader.buf + reader.pos, n);
+    reader.pos += n;
+    return (int)n;
+  }
+  return recv(reader.fd, data, size, 0);
 }
 
 static std::string build_directory_listing(const std::string& script_name, std::string& path) {
@@ -1108,10 +1138,10 @@ static std::string build_directory_listing(const std::string& script_name, std::
 
 /* read header lines until the empty line that ends the request header.
  * returns false when the peer disconnected mid-header. */
-static bool read_request_headers(int msgsock, server::HttpHeader& http_headers) {
+static bool read_request_headers(LineReader& reader, server::HttpHeader& http_headers) {
   std::string str;
   do {
-    if (!get_line(msgsock, str))
+    if (!get_line(reader, str))
       return false;
     if (str.empty())
       break;
@@ -1534,6 +1564,9 @@ void* response_thread(void* param) {
   char buf[BUFSIZ];
   char length[256];
   bool keep_alive;
+  LineReader reader;
+
+  line_reader_init(reader, msgsock);
 
 request_top:
   keep_alive = false;
@@ -1548,11 +1581,11 @@ request_top:
   content_length = 0;
   vauth.clear();
 
-  if (!get_line(msgsock, req) || req.empty())
+  if (!get_line(reader, req) || req.empty())
     goto request_end;
   if (VERBOSE(1)) printf("* %s\n", req.c_str());
 
-  if (!read_request_headers(msgsock, http_headers))
+  if (!read_request_headers(reader, http_headers))
     goto request_end;
 
   if (VERBOSE(2)) {
@@ -1777,7 +1810,8 @@ request_top:
 
           if (res_info && content_length > 0) {
             while (content_length) {
-              int nrecv = recv(msgsock, buf, sizeof(buf), 0);
+              int nrecv = body_read(reader, buf,
+                content_length < sizeof(buf) ? content_length : sizeof(buf));
               if (nrecv <= 0) break;
               char* ptr = buf;
               while (nrecv > 0) {
@@ -1831,8 +1865,8 @@ request_done:
   if (content_length > 0) {
     /* drain the unread request body */
     while(content_length > 0) {
-      int nrecv = recv(msgsock, buf,
-        content_length < sizeof(buf) ? content_length : sizeof(buf), 0);
+      int nrecv = body_read(reader, buf,
+        content_length < sizeof(buf) ? content_length : sizeof(buf));
       if (nrecv <= 0) {
         keep_alive = false;
         break;
