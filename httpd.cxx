@@ -1880,52 +1880,50 @@ request_done:
       res_proto, res_code, res_msg, res_head, keep_alive);
   }
 
+  /* assemble the whole response header (and, for generated bodies, the
+   * body as well) into one buffer so it goes out in a single send(). */
+  ret.clear();
   if (!res_code.empty()) {
-    send(msgsock, res_proto.c_str(), (int)res_proto.size(), 0);
-    send(msgsock, " ", 1, 0);
-    send(msgsock, res_code.c_str(), (int)res_code.size(), 0);
-    send(msgsock, " ", 1, 0);
-    send(msgsock, res_msg.c_str(), (int)res_msg.size(), 0);
-    send(msgsock, "\r\n", 2, 0);
+    ret += res_proto;
+    ret += " ";
+    ret += res_code;
+    ret += " ";
+    ret += res_msg;
+    ret += "\r\n";
   }
-
-  if (!res_head.empty()) {
-    send(msgsock, res_head.c_str(), (int)res_head.size(), 0);
-  }
+  ret += res_head;
 
   if (res_info) {
-    send(msgsock, "\r\n", 2, 0);
+    ret += "\r\n";
+    send(msgsock, ret.c_str(), (int)ret.size(), 0);
     send_response_content(httpd, msgsock, res_info);
     res_close(res_info);
     res_info = NULL;
   } else
   if (!res_body.empty()) {
     if (keep_alive)
-      ret = "Connection: keep-alive\r\n";
+      ret += "Connection: keep-alive\r\n";
     else
-      ret = "Connection: close\r\n";
-    send(msgsock, ret.c_str(), (int)ret.size(), 0);
+      ret += "Connection: close\r\n";
 
-    ret = "Content-Type: ";
+    ret += "Content-Type: ";
     ret += res_type + "\r\n";
-    send(msgsock, ret.c_str(), (int)ret.size(), 0);
 
-    ret = res_body;
-    sprintf(length, "%lu", (unsigned long)ret.size());
-    ret = "Content-Length: ";
+    sprintf(length, "%lu", (unsigned long)res_body.size());
+    ret += "Content-Length: ";
     ret += length;
     ret += "\r\n";
+
+    ret += "\r\n";
+
+    if (vparam.size() > 0 && vparam[0] != "HEAD")
+      ret += res_body;
     send(msgsock, ret.c_str(), (int)ret.size(), 0);
-
-    send(msgsock, "\r\n", 2, 0);
-
-    if (vparam.size() > 0 && vparam[0] != "HEAD") {
-      ret = res_body;
-      send(msgsock, ret.c_str(), (int)ret.size(), 0);
-    }
   }
-  else
-    send(msgsock, "\r\n", (int)2, 0);
+  else {
+    ret += "\r\n";
+    send(msgsock, ret.c_str(), (int)ret.size(), 0);
+  }
 
   if (keep_alive)
     goto request_top;
