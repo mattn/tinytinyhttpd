@@ -13,8 +13,8 @@ char *optarg;
  
 static int getopt(int argc, char** argv, const char* opts) {
   static int sp = 1;
-  register int c;
-  register char *cp;
+  int c;
+  char *cp;
 
   if(sp == 1) {
     if(optind >= argc ||

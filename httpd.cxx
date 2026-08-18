@@ -1016,7 +1016,7 @@ static RES_INFO* res_popen(std::vector<std::string>& args, std::vector<std::stri
 static void res_closewriter(RES_INFO* res_info) {
   if (res_info && res_info->write) {
     close(res_info->write);
-    res_info->write = NULL;
+    res_info->write = 0;
   }
 }
 
@@ -1803,7 +1803,7 @@ request_done:
     send(msgsock, ret.c_str(), (int)ret.size(), 0);
 
     ret = res_body;
-    sprintf(length, "%u", ret.size());
+    sprintf(length, "%lu", (unsigned long)ret.size());
     ret = "Content-Length: ";
     ret += length;
     ret += "\r\n";
@@ -2094,7 +2094,7 @@ bool server::wait() {
 #else
   pthread_join(thread, NULL);
 #endif
-  thread = NULL;
+  thread = 0;
   return true;
 }
 
