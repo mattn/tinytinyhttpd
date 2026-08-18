@@ -1078,7 +1078,7 @@ std::map<std::string, std::string> parse_querystring(const std::string& query_st
 #endif
 
 #ifndef _WIN32
-#define _rotl(x, y) ((x<<y)|(x>>(32-y)))
+#define _rotl(x, y) (((x)<<(y))|((x)>>(32-(y))))
 #endif
 
 #define F1(X, Y, Z) ((Z) ^ ((X) & ((Y) ^ (Z))))
