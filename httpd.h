@@ -156,7 +156,8 @@ public:
     port = _port;
   }
   ~server() {
-    stop();
+    if (stop())
+      wait();
   }
   bool start();
   bool stop();

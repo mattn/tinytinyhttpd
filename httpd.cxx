@@ -2194,7 +2194,9 @@ bool server::stop() {
 #else
   pthread_kill(thread, SIGINT);
 #endif
-  wait();
+  /* joining here would deadlock when stop() is called from a signal
+   * handler while another thread already sits in wait(); callers use
+   * wait() to block until the listener thread is gone. */
   return true;
 }
 
