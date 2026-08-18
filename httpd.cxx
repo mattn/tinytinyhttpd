@@ -1589,7 +1589,7 @@ request_top:
         }
         if (it_basicauth != httpd->basic_auths.end()) {
           bool authorized = false;
-          if (!vauth.empty()) {
+          if (vauth.size() >= 2) {
             if (VERBOSE(2)) printf("  authorizing %s\n", vparam[1].c_str());
             std::vector<server::AuthInfo>::iterator it_auth;
             for (it_auth = it_basicauth->auths.begin(); it_auth != it_basicauth->auths.end(); it_auth++) {
