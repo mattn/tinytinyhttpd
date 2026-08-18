@@ -853,6 +853,7 @@ static std::vector<server::ListInfo> res_flist(std::string& path) {
   if (!path.empty() && path[path.size()-1] != '/')
     path += "/";
   dir = opendir(path.c_str());
+  if (!dir) return ret;
   while((dirp = readdir(dir))) {
     if (strcmp(dirp->d_name, ".")) {
       server::ListInfo listInfo;
