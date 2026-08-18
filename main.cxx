@@ -128,8 +128,8 @@ int main(int argc, char* argv[]) {
   int family = AF_UNSPEC;
 
   opterr = 0;
-  while ((c = getopt(argc, (char**)argv, "46p:c:d:xvh") != -1)) {
-    switch (optopt) {
+  while ((c = getopt(argc, (char**)argv, "46p:c:d:xvhV")) != -1) {
+    switch (c) {
     case '4': family = AF_INET;  break;
     case '6': family = AF_INET6; break;
     case 'p': if (optarg) port = optarg; break;
