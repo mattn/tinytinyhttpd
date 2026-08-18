@@ -1055,6 +1055,32 @@ static bool get_line(int fd, std::string& s) {
   return true;
 }
 
+/* read header lines until the empty line that ends the request header.
+ * returns false when the peer disconnected mid-header. */
+static bool read_request_headers(int msgsock, server::HttpHeader& http_headers) {
+  std::string str;
+  do {
+    if (!get_line(msgsock, str))
+      return false;
+    if (str.empty())
+      break;
+    const char *ptr = str.c_str();
+
+    if (!strnicmp(ptr, "SERVER_", 7) || !strnicmp(ptr, "REMOTE_", 7))
+      continue;
+    char* stp = (char*)strchr(ptr, ':');
+    if (stp) {
+      *stp = 0;
+      std::string key = ptr;
+      std::string val = trim_string(stp + 1);
+      replace_string(key, "-", "_");
+      std::transform(key.begin(), key.end(), key.begin(), toupper);
+      http_headers[key] = val;
+    }
+  } while (true);
+  return true;
+}
+
 void* response_thread(void* param) {
   server::HttpdInfo *pHttpdInfo = (server::HttpdInfo*)param;
   server *httpd = pHttpdInfo->httpd;
@@ -1095,26 +1121,8 @@ request_top:
     goto request_end;
   if (VERBOSE(1)) printf("* %s\n", req.c_str());
 
-  do {
-    if (!get_line(msgsock, str))
-      goto request_end;
-    if (str.empty())
-      break;
-    const char *ptr = str.c_str();
-
-    if (!strnicmp(ptr, "SERVER_", 7) || !strnicmp(ptr, "REMOTE_", 7))
-      continue;
-    char* stp = (char*)strchr(ptr, ':');
-    if (stp) {
-      *stp = 0;
-      std::string key = ptr;
-      std::transform(key.begin(), key.end(), key.begin(), toupper);
-      std::string val = trim_string(stp + 1);
-      replace_string(key, "-", "_");
-      std::transform(key.begin(), key.end(), key.begin(), toupper);
-      http_headers[key] = val;
-    }
-  } while (true);
+  if (!read_request_headers(msgsock, http_headers))
+    goto request_end;
 
   if (VERBOSE(2)) {
     server::HttpHeader::const_iterator it;
