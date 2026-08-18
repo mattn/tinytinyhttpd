@@ -13,8 +13,8 @@ char *optarg;
  
 static int getopt(int argc, char** argv, const char* opts) {
   static int sp = 1;
-  register int c;
-  register char *cp;
+  int c;
+  char *cp;
 
   if(sp == 1) {
     if(optind >= argc ||
@@ -95,7 +95,8 @@ bool loadAuthfile(const char* filename, std::vector<tthttpd::server::AuthInfo>& 
     char* ptr = strpbrk(line, "\r\n");
     if (ptr) *ptr = 0;
     ptr = strchr(line, ':');
-    if (ptr) *ptr++ = 0;
+    if (!ptr) continue;
+    *ptr++ = 0;
     tthttpd::server::AuthInfo info;
     info.user = line;
     info.pass = ptr;
@@ -128,8 +129,8 @@ int main(int argc, char* argv[]) {
   int family = AF_UNSPEC;
 
   opterr = 0;
-  while ((c = getopt(argc, (char**)argv, "46p:c:d:xvh") != -1)) {
-    switch (optopt) {
+  while ((c = getopt(argc, (char**)argv, "46p:c:d:xvhV")) != -1) {
+    switch (c) {
     case '4': family = AF_INET;  break;
     case '6': family = AF_INET6; break;
     case 'p': if (optarg) port = optarg; break;
@@ -245,6 +246,10 @@ int main(int argc, char* argv[]) {
       tthttpd::server::BasicAuthInfo basic_auth_info;
       basic_auth_info.target = it->first;
       std::vector<std::string> infos = tthttpd::split_string(it->second, ",");
+      if (infos.size() < 3) {
+        fprintf(stderr, "ignored malformed authentication entry \"%s\"\n", it->first.c_str());
+        continue;
+      }
       basic_auth_info.method = infos[0];
       basic_auth_info.realm = infos[1];
       std::vector<tthttpd::server::AuthInfo> auth_infos;

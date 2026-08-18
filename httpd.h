@@ -156,7 +156,8 @@ public:
     port = _port;
   }
   ~server() {
-    stop();
+    if (stop())
+      wait();
   }
   bool start();
   bool stop();
@@ -198,10 +199,11 @@ public:
       it = std::find(path_sep.begin(), path_sep.end(), "..");
       if (it == path_sep.end()) break;
       if (it == path_sep.begin()) {
+        path_sep.erase(it);
         continue;
       }
-      path_sep.erase(it-1);
-      path_sep.erase(it-1);
+      it = path_sep.erase(it-1);
+      path_sep.erase(it);
     }
     std::string path_real;
     for(it = path_sep.begin(); it != path_sep.end(); it++) {

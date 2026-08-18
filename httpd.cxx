@@ -371,9 +371,19 @@ static bool filetime2unixtime(const FILETIME* ft, struct tm* tm) {
 }
 #endif
 
+static bool match_suffix(const std::string& str, const std::string& suffix) {
+  return str.size() >= suffix.size() &&
+    !strcmp(str.c_str() + str.size() - suffix.size(), suffix.c_str());
+}
+
 static std::string res_curtime(int diff = 0) {
   time_t tt = time(NULL) + diff;
+#ifdef _WIN32
   struct tm* p = gmtime(&tt);
+#else
+  struct tm tmbuf;
+  struct tm* p = gmtime_r(&tt, &tmbuf);
+#endif
 
   char buf[256];
   sprintf(buf, "%s, %02d %s %04d %02d:%02d:%02d GMT",
@@ -462,7 +472,7 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
       struct stat  st;
     if (stat((char *)path.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
       for (itext = pathexts.begin(); itext != pathexts.end(); itext++) {
-        if (path.substr(path.size() - itext->size()) == *itext) {
+        if (match_suffix(path, *itext)) {
           path_info = file.c_str() + path.size();
           script_name.resize(script_name.size() - path_info.size());
           file = path;
@@ -502,7 +512,7 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
       if (it_mime->second[0] != '@') continue;
       std::string match = ".";
       match += it_mime->first;
-      if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+      if (match_suffix(path, match)) {
         type = it_mime->second;
         path_info = file.c_str() + path.size();
         script_name.resize(script_name.size() - path_info.size());
@@ -822,7 +832,7 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
       if (it_mime->second[0] != '@') continue;
       std::string match = ".";
       match += it_mime->first;
-      if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+      if (match_suffix(path, match)) {
         type = it_mime->second;
         path_info = file.c_str() + path.size();
         script_name.resize(script_name.size() - path_info.size());
@@ -843,6 +853,7 @@ static std::vector<server::ListInfo> res_flist(std::string& path) {
   if (!path.empty() && path[path.size()-1] != '/')
     path += "/";
   dir = opendir(path.c_str());
+  if (!dir) return ret;
   while((dirp = readdir(dir))) {
     if (strcmp(dirp->d_name, ".")) {
       server::ListInfo listInfo;
@@ -851,7 +862,7 @@ static std::vector<server::ListInfo> res_flist(std::string& path) {
       struct stat statbuf = {0};
       stat(file.c_str(), &statbuf);
       listInfo.size = statbuf.st_size;
-      memcpy(&listInfo.date, gmtime(&statbuf.st_mtime), sizeof(struct tm));
+      gmtime_r(&statbuf.st_mtime, &listInfo.date);
       listInfo.isdir = res_isdir(file);
       ret.push_back(listInfo);
     }
@@ -871,7 +882,8 @@ static std::string res_ftime(std::string& file, int diff = 0) {
   struct stat statbuf = {0};
   stat(file.c_str(), &statbuf);
   time_t tt = statbuf.st_mtime + diff;
-  struct tm* p=gmtime(&tt);
+  struct tm tmbuf;
+  struct tm* p = gmtime_r(&tt, &tmbuf);
   //int  offset;
   //int offset= -(int)timezone;
   //offset = offset/60/60*100 + (offset/60)%60;
@@ -913,22 +925,19 @@ static unsigned long res_write(RES_INFO* res_info, char* data, unsigned long siz
 }
 
 static long long res_read(RES_INFO* res_info, char* data, unsigned long size) {
-  if (res_info->process) {
-    int s = 0;
-    if (waitpid(res_info->process, &s, WNOHANG) == -1) {
-      return -1;
-    }
-  }
   fd_set fdset;
   FD_ZERO(&fdset);
   FD_SET(res_info->read, &fdset);
   struct timeval tv;
   tv.tv_sec = 0;
-  tv.tv_usec = 0;
-  int r = select(FD_SETSIZE, &fdset, NULL, NULL, &tv);
+  tv.tv_usec = 10000;
+  int r = select(res_info->read + 1, &fdset, NULL, NULL, &tv);
   if (r == -1) return -1;
   if (FD_ISSET(res_info->read, &fdset)) {
-    return (long long) read(res_info->read, data, size);
+    long long nread = (long long) read(res_info->read, data, size);
+    if (nread == 0 && res_info->process)
+      return -1;  /* EOF: CGI closed its end of the pipe */
+    return nread;
   }
   return 0;
 }
@@ -1016,7 +1025,7 @@ static RES_INFO* res_popen(std::vector<std::string>& args, std::vector<std::stri
 static void res_closewriter(RES_INFO* res_info) {
   if (res_info && res_info->write) {
     close(res_info->write);
-    res_info->write = NULL;
+    res_info->write = 0;
   }
 }
 
@@ -1030,20 +1039,512 @@ static void res_close(RES_INFO* res_info) {
 
 #endif
 
-static bool get_line(int fd, std::string& s) {
-  char c = 0;
-  std::stringstream ss;
+/* buffered reader for the request socket. reading ahead may buffer part
+ * of the request body (or a pipelined request), so all reads from the
+ * socket must go through body_read()/get_line() on the same reader. */
+typedef struct {
+  int fd;
+  char buf[BUFSIZ];
+  int len;
+  int pos;
+} LineReader;
+
+static void line_reader_init(LineReader& reader, int fd) {
+  reader.fd = fd;
+  reader.len = 0;
+  reader.pos = 0;
+}
+
+static bool get_line(LineReader& reader, std::string& s) {
+  s.clear();
   while (1) {
-    if (recv(fd, &c, 1, 0) <= 0)
-      return false;
+    if (reader.pos >= reader.len) {
+      reader.len = recv(reader.fd, reader.buf, sizeof(reader.buf), 0);
+      reader.pos = 0;
+      if (reader.len <= 0)
+        return false;
+    }
+    char c = reader.buf[reader.pos++];
     if (c == '\r')
       continue;
     if (c == '\n')
       break;
-    ss << c;
+    s += c;
   }
-  s = ss.str();
   return true;
+}
+
+static int body_read(LineReader& reader, char* data, unsigned long size) {
+  if (reader.pos < reader.len) {
+    unsigned long n = reader.len - reader.pos;
+    if (n > size) n = size;
+    memcpy(data, reader.buf + reader.pos, n);
+    reader.pos += n;
+    return (int)n;
+  }
+  return recv(reader.fd, data, size, 0);
+}
+
+static std::string build_directory_listing(const std::string& script_name, std::string& path) {
+  char buf[256];
+  std::string res_body;
+
+  res_body = "<html><head><title>";
+  res_body += script_name;
+  res_body += "</title></head><body><h1>";
+  res_body += script_name;
+  res_body += "</h1><hr /><pre>";
+  res_body += "<table border=0>";
+  std::vector<server::ListInfo> flist = res_flist(path);
+  std::vector<server::ListInfo>::iterator it;
+
+  // TODO: sort and reverse, sort key
+  //std::map<std::string, std::string> params = tthttpd::parse_querystring(query_string);
+
+  for(it = flist.begin(); it != flist.end(); it++) {
+    std::string name = it->name;
+    res_body += "<tr><td><a href=\"";
+    res_body += tthttpd::url_encode(name);
+    res_body += "\">";
+    res_body += tthttpd::html_encode(name);
+    res_body += "</a></td>";
+    res_body += "<td>";
+    struct tm tm = it->date;
+    sprintf(buf, "%02d-%s-%04d %02d:%02d",
+      tm.tm_mday,
+      months[tm.tm_mon],
+      tm.tm_year+1900,
+      tm.tm_hour,
+      tm.tm_min);
+    res_body += buf;
+    res_body += "</td>";
+    res_body += "<td align=right>&nbsp;&nbsp;";
+    if (!it->isdir) {
+      if (it->size < 1000)
+        sprintf(buf, "%d", (int)it->size);
+      else
+      if (it->size < 1000000)
+        sprintf(buf, "%dK", (int)it->size/1000);
+      else
+        sprintf(buf, "%.1dM", (int)it->size/1000000);
+      res_body += buf;
+    } else
+      res_body += "[DIR]";
+    res_body += "</td></tr>";
+  }
+  res_body += "</table></pre ><hr /></body></html>";
+  return res_body;
+}
+
+/* read header lines until the empty line that ends the request header.
+ * returns false when the peer disconnected mid-header. */
+static bool read_request_headers(LineReader& reader, server::HttpHeader& http_headers) {
+  std::string str;
+  do {
+    if (!get_line(reader, str))
+      return false;
+    if (str.empty())
+      break;
+    const char *ptr = str.c_str();
+
+    if (!strnicmp(ptr, "SERVER_", 7) || !strnicmp(ptr, "REMOTE_", 7))
+      continue;
+    char* stp = (char*)strchr(ptr, ':');
+    if (stp) {
+      *stp = 0;
+      std::string key = ptr;
+      std::string val = trim_string(stp + 1);
+      replace_string(key, "-", "_");
+      std::transform(key.begin(), key.end(), key.begin(), toupper);
+      http_headers[key] = val;
+    }
+  } while (true);
+  return true;
+}
+
+/* read the header block a CGI wrote to its stdout, folding it into the
+ * response status/header state. */
+static void parse_cgi_response_header(server* httpd, int msgsock,
+    RES_INFO* res_info, std::string& res_proto, std::string& res_code,
+    std::string& res_msg, std::string& res_head, bool& keep_alive) {
+  bool res_keep_alive = false;
+  res_head.clear();
+
+  do {
+    std::string str = res_fgets(res_info);
+    if (str.empty()) break;
+    const char *key, *ptr = str.c_str();
+    size_t len;
+    if (str[0] == '<') {
+      // workaround for broken non-header response.
+      send(msgsock, ptr, strlen(ptr), 0);
+      res_code.clear();
+      break;
+    }
+    if (VERBOSE(2)) printf("  %s\n", ptr);
+    if (res_head.empty()) {
+      if (!strnicmp(ptr, "HTTP/1.", 7)) {
+        char* tmp1;
+        char* tmp2;
+
+        tmp1 = (char*) strchr(ptr, ' ');
+        if (tmp1) {
+          *tmp1 = 0;
+          res_proto = ptr;
+          tmp2 = strchr(tmp1 + 1, ' ');
+          if (tmp2) {
+            *tmp2 = 0;
+            res_code = tmp1 + 1;
+            res_msg = tmp2 + 1;
+          } else {
+            res_code = tmp1 + 1;
+          }
+        }
+        continue;
+      }
+    }
+    key = "connection:";
+    len = strlen(key);
+    if (!strnicmp(ptr, key, len)) {
+      if (!stricmp(trim_string(ptr + len).c_str(), "keep-alive"))
+        res_keep_alive = true;
+    }
+    key = "WWW-Authenticate: Basic ";
+    len = strlen(key);
+    if (!strnicmp(ptr, key, len)) {
+      res_code = "401";
+      res_msg = "Unauthorized";
+    }
+    key = "Status:";
+    len = strlen(key);
+    if (!strnicmp(ptr, key, len)) {
+      std::vector<std::string> codes;
+      split_string(trim_string(str.substr(len)), " ", codes);
+      if (codes.size())
+        res_code = codes[0];
+      else
+        res_code = "";
+    }
+    key = "Content-Length:";
+    len = strlen(key);
+    if (!strnicmp(ptr, key, len)) {
+      res_info->size = (unsigned long)atol(str.substr(len).c_str());
+    }
+    res_head += ptr;
+    res_head += "\r\n";
+  } while (true);
+  if (!res_keep_alive) {
+    keep_alive = false;
+    res_head += "Connection: close\r\n";
+  }
+}
+
+/* stream the response body from a file or CGI pipe to the client,
+ * preferring the platform sendfile API when the size is known. */
+static void send_response_content(server* httpd, int msgsock, RES_INFO* res_info) {
+  char buf[BUFSIZ];
+  unsigned long total = res_info->size;
+  if (total != (unsigned long) -1) {
+#if defined LINUX_SENDFILE_API
+    /* sendfile may send fewer bytes than requested; it advances the
+     * file offset, so unsent bytes fall through to the generic loop. */
+    while (total > 0) {
+      ssize_t sent = sendfile(msgsock, res_info->read, NULL, total);
+      if (sent <= 0) break;
+      total -= sent;
+    }
+#elif defined FREEBSD_SENDFILE_API
+    if (sendfile(msgsock, res_info->read, NULL, total, NULL, NULL, 0) == 0) total = 0;
+#elif defined _WIN32
+    if (!res_info->process && lpfnTransmitFile && lpfnTransmitFile(
+      msgsock,
+      res_info->read,
+      total,
+      0,
+      NULL,
+      NULL,
+      TF_WRITE_BEHIND)) total = 0;
+#endif
+    if (total == 0) return;
+  }
+  if (VERBOSE(1)) printf("* transfer file using default function\n");
+  {
+    fd_set fdset;
+    FD_ZERO(&fdset);
+    struct timeval tv;
+    while(total != 0) {
+      if (res_info->write) {
+        FD_SET(msgsock, &fdset);
+        tv.tv_sec = 0;
+        tv.tv_usec = 0;
+        int r = select(msgsock + 1, &fdset, NULL, NULL, &tv);
+        if (r < 0) break;
+        if (r > 0 && FD_ISSET(msgsock, &fdset)) {
+          int nrecv = recv(msgsock, buf, sizeof(buf), 0);
+          if (nrecv > 0) {
+            res_write(res_info, buf, nrecv);
+          }
+        }
+      }
+      long long res = res_read(res_info, buf, sizeof(buf));
+      if (res < 0) break;
+      if (res > 0) {
+        if (VERBOSE(3))
+#ifdef _WIN32
+          printf("  reading part %I64d bytes\n", res);
+#else
+          printf("  reading part %lld bytes\n", res);
+#endif
+        send(msgsock, buf, res, 0);
+        if (total > 0) {
+          total -= res;
+        }
+      } else {
+#ifdef _WIN32
+        Sleep(1);
+#else
+        usleep(10);
+#endif
+      }
+    }
+  }
+}
+
+static void prepare_401_response(const std::string& realm,
+    std::string& res_code, std::string& res_msg,
+    std::string& res_head, std::string& res_body) {
+  res_code = "401";
+  res_msg = "Authorization Required";
+  res_head = "WWW-Authenticate: Basic";
+  if (!realm.empty()) {
+    res_head += " realm=\"";
+    res_head += realm;
+    res_head += "\"";
+  }
+  res_head += "\r\n";
+  res_body = "Authorization Required";
+}
+
+/* check basic auth credentials and per-path accept lists.
+ * returns true when the request may proceed; false means a 401 response
+ * has been prepared. */
+static bool check_authorization(server* httpd, const std::string& method,
+    const std::string& request_target, const std::string& script_name,
+    const std::vector<std::string>& vauth,
+    std::string& res_code, std::string& res_msg,
+    std::string& res_head, std::string& res_body) {
+  std::vector<server::BasicAuthInfo>::iterator it_basicauth;
+  std::vector<std::string> methods;
+  for (it_basicauth = httpd->basic_auths.begin(); it_basicauth != httpd->basic_auths.end(); it_basicauth++) {
+    split_string(it_basicauth->method, "/", methods);
+    if (!methods.empty() && std::find(methods.begin(), methods.end(), method) == methods.end()) continue;
+    if (!it_basicauth->target.empty() && strncmp(request_target.c_str(), it_basicauth->target.c_str(), it_basicauth->target.size())) continue;
+    break;
+  }
+  if (it_basicauth != httpd->basic_auths.end()) {
+    bool authorized = false;
+    if (vauth.size() >= 2) {
+      if (VERBOSE(2)) printf("  authorizing %s\n", request_target.c_str());
+      std::vector<server::AuthInfo>::iterator it_auth;
+      for (it_auth = it_basicauth->auths.begin(); it_auth != it_basicauth->auths.end(); it_auth++) {
+        if (it_auth->user != vauth[0]) continue;
+        // TODO: only support plain-text password.
+        //  hope to access .htpasswd file.
+        if (it_auth->pass != vauth[1]) continue;
+        authorized = true;
+      }
+    }
+    if (!authorized) {
+      prepare_401_response(it_basicauth->realm,
+        res_code, res_msg, res_head, res_body);
+      return false;
+    }
+  }
+  if (!vauth.empty()) {
+    server::AcceptAuths::iterator it_accept;
+    for(it_accept = httpd->accept_auths.begin(); it_accept != httpd->accept_auths.end(); it_accept++) {
+      if (!strncmp(it_accept->first.c_str(), script_name.c_str(), it_accept->first.size())) {
+        if (std::find(
+              it_accept->second.accept_list.begin(),
+              it_accept->second.accept_list.end(), vauth[0])
+            == it_accept->second.accept_list.end()) {
+          prepare_401_response(
+            it_basicauth != httpd->basic_auths.end() ? it_basicauth->realm : "",
+            res_code, res_msg, res_head, res_body);
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+/* build the argument list and CGI/1.1 environment for a CGI request. */
+static void setup_cgi_args_env(server* httpd, int servno,
+    const std::string& address, const std::string& port,
+    const std::string& method,
+    const std::string& request_uri, const std::string& script_name,
+    const std::string& query_string, const std::string& path_info,
+    const std::string& path, const std::string& type,
+    unsigned long content_length,
+    const std::vector<std::string>& vauth,
+    server::HttpHeader& http_headers,
+    std::vector<std::string>& args, std::vector<std::string>& envs) {
+  char buf[BUFSIZ];
+
+  if (type.size() == 1) {
+    args.push_back(path);
+  } else {
+    args.push_back(type.substr(1));
+    args.push_back(path);
+  }
+  if (query_string.size())
+    args.push_back(query_string);
+
+  std::string env;
+
+  std::string host_header;
+  if (http_headers.count("HOST")) {
+    host_header = http_headers["HOST"];
+    http_headers.erase("HOST");
+  }
+  if (!host_header.empty()) {
+    env = "HTTP_HOST=";
+    env += host_header;
+    envs.push_back(env);
+  } else
+  if (httpd->hostname.size()) {
+    sprintf(buf, "HTTP_HOST=%s:%s", httpd->hostname.c_str(), httpd->port.c_str());
+    env = buf;
+    envs.push_back(env);
+  }
+
+  http_headers.erase("SERVER_PROTOCOL");
+  http_headers.erase("SERVER_ADDR");
+  http_headers.erase("SERVER_NAME");
+  http_headers.erase("REMOTE_ADDR");
+  http_headers.erase("REMOTE_PORT");
+  http_headers.erase("REMOTE_USER");
+
+  env = "SERVER_PROTOCOL=HTTP/1.1";
+  envs.push_back(env);
+
+  env = "SERVER_ADDR=";
+  env += httpd->hostaddr[servno];
+  envs.push_back(env);
+
+  env = "SERVER_NAME=";
+  if (httpd->hostname.size()) {
+    env += httpd->hostname;
+  } else {
+    std::string server_name = host_header;
+    size_t colon_pos = server_name.find_last_of(':');
+    if (colon_pos != std::string::npos)
+      server_name.resize(colon_pos);
+    env += server_name;
+  }
+  envs.push_back(env);
+
+  sprintf(buf, "SERVER_PORT=%s", httpd->port.c_str());
+  env = buf;
+  envs.push_back(env);
+
+  env = "REMOTE_ADDR=";
+  env += address;
+  envs.push_back(env);
+
+  sprintf(buf, "REMOTE_PORT=%s", port.c_str());
+  env = buf;
+  envs.push_back(env);
+
+  if (vauth.size() && !vauth[0].empty()) {
+    env = "REMOTE_USER=";
+    env += vauth[0];
+    envs.push_back(env);
+  }
+
+  server::HttpHeader::const_iterator it_head;
+  for (it_head = http_headers.begin(); it_head != http_headers.end(); it_head++) {
+    env = "HTTP_";
+    env += it_head->first;
+    env += "=";
+    env += it_head->second;
+    envs.push_back(env);
+  }
+
+  env = "REQUEST_METHOD=";
+  env += method;
+  envs.push_back(env);
+
+  env = "REQUEST_URI=";
+  env += request_uri;
+  envs.push_back(env);
+
+  env = "SCRIPT_FILENAME=";
+  env += path;
+  envs.push_back(env);
+
+  env = "SCRIPT_NAME=";
+  env += script_name;
+  envs.push_back(env);
+
+  env = "QUERY_STRING=";
+  env += query_string;
+  envs.push_back(env);
+
+  if (!path_info.empty()) {
+    env = "PATH_INFO=";
+    env += path_info;
+    envs.push_back(env);
+  } else {
+    env = "PATH_INFO=";
+    env += request_uri;
+    envs.push_back(env);
+  }
+
+  env = "REDIRECT_STATUS=1";
+  envs.push_back(env);
+
+  env = "PATH=";
+  env += getenv("PATH");
+  envs.push_back(env);
+
+#ifdef _WIN32
+  GetWindowsDirectoryA(buf, sizeof(buf));
+  env = "SystemRoot=";
+  env += buf;
+  envs.push_back(env);
+#endif
+
+  char* p = getenv("PERL5LIB");
+  if (p) {
+    env = "PERL5LIB=";
+    env += p;
+    envs.push_back(env);
+  }
+
+  env = "SERVER_SOFTWARE=tinytinyhttpd";
+  envs.push_back(env);
+
+  env = "GATEWAY_INTERFACE=CGI/1.1";
+  envs.push_back(env);
+
+  server::RequestEnvironments::iterator it_env;
+  for(it_env = httpd->request_environments.begin(); it_env != httpd->request_environments.end(); it_env++) {
+    env = it_env->first + "=";
+    env += it_env->second;
+    envs.push_back(env);
+  }
+
+  if (method == "POST") {
+    env = "CONTENT_TYPE=";
+    env += http_headers["CONTENT_TYPE"];
+    envs.push_back(env);
+
+    sprintf(buf, "CONTENT_LENGTH=%lu", content_length);
+    env = buf;
+    envs.push_back(env);
+  }
 }
 
 void* response_thread(void* param) {
@@ -1068,6 +1569,9 @@ void* response_thread(void* param) {
   char buf[BUFSIZ];
   char length[256];
   bool keep_alive;
+  LineReader reader;
+
+  line_reader_init(reader, msgsock);
 
 request_top:
   keep_alive = false;
@@ -1082,30 +1586,12 @@ request_top:
   content_length = 0;
   vauth.clear();
 
-  if (!get_line(msgsock, req) || req.empty())
+  if (!get_line(reader, req) || req.empty())
     goto request_end;
   if (VERBOSE(1)) printf("* %s\n", req.c_str());
 
-  do {
-    if (!get_line(msgsock, str))
-      goto request_end;
-    if (str.empty())
-      break;
-    const char *ptr = str.c_str();
-
-    if (!strnicmp(ptr, "SERVER_", 7) || !strnicmp(ptr, "REMOTE_", 7))
-      continue;
-    char* stp = (char*)strchr(ptr, ':');
-    if (stp) {
-      *stp = 0;
-      std::string key = ptr;
-      std::transform(key.begin(), key.end(), key.begin(), toupper);
-      std::string val = trim_string(stp + 1);
-      replace_string(key, "-", "_");
-      std::transform(key.begin(), key.end(), key.begin(), toupper);
-      http_headers[key] = val;
-    }
-  } while (true);
+  if (!read_request_headers(reader, http_headers))
+    goto request_end;
 
   if (VERBOSE(2)) {
     server::HttpHeader::const_iterator it;
@@ -1200,73 +1686,9 @@ request_top:
         }
         */
 
-        std::vector<server::BasicAuthInfo>::iterator it_basicauth;
-        std::vector<std::string> methods;
-        for (it_basicauth = httpd->basic_auths.begin(); it_basicauth != httpd->basic_auths.end(); it_basicauth++) {
-          split_string(it_basicauth->method, "/", methods);
-          if (!methods.empty() && std::find(methods.begin(), methods.end(), vparam[0]) == methods.end()) continue;
-          if (!it_basicauth->target.empty() && strncmp(vparam[1].c_str(), it_basicauth->target.c_str(), it_basicauth->target.size())) continue;
-          break;
-        }
-        if (it_basicauth != httpd->basic_auths.end()) {
-          bool authorized = false;
-          if (!vauth.empty()) {
-            if (VERBOSE(2)) printf("  authorizing %s\n", vparam[1].c_str());
-            std::vector<server::AuthInfo>::iterator it_auth;
-            for (it_auth = it_basicauth->auths.begin(); it_auth != it_basicauth->auths.end(); it_auth++) {
-              if (it_auth->user != vauth[0]) continue;
-              /*
-              std::vector<std::string> pwd = split_string(it_auth->pass, "$");
-              std::string tmp = vauth[1];
-              tmp += "$apr1$";
-              tmp += pwd[2];
-              std::string pwd_md5 = string_to_hex(crypt(vauth[1].c_str(), pwd[2].c_str()));
-              printf("%s, %s\n", pwd_md5.c_str(), it_auth->pass.c_str());
-              if (it_auth->pass != pwd_md5) continue;
-              */
-              // TODO: only support plain-text password.
-              //  hope to access .htpasswd file.
-              if (it_auth->pass != vauth[1]) continue;
-              authorized = true;
-            }
-          }
-          if (!authorized) {
-            res_code = "401";
-            res_msg = "Authorization Required";
-            res_head = "WWW-Authenticate: Basic";
-            if (!it_basicauth->realm.empty()) {
-              res_head += " realm=\"";
-              res_head += it_basicauth->realm;
-              res_head += "\"";
-            }
-            res_head += "\r\n";
-            res_body = "Authorization Required";
-            goto request_done;
-          }
-        }
-        if (!vauth.empty()) {
-          server::AcceptAuths::iterator it_accept;
-          for(it_accept = httpd->accept_auths.begin(); it_accept != httpd->accept_auths.end(); it_accept++) {
-            if (!strncmp(it_accept->first.c_str(), script_name.c_str(), it_accept->first.size())) {
-              if (std::find(
-                    it_accept->second.accept_list.begin(),
-                    it_accept->second.accept_list.end(), vauth[0])
-                  == it_accept->second.accept_list.end()) {
-                res_code = "401";
-                res_msg = "Authorization Required";
-                res_head = "WWW-Authenticate: Basic";
-                if (!it_basicauth->realm.empty()) {
-                  res_head += " realm=\"";
-                  res_head += it_basicauth->realm;
-                  res_head += "\"";
-                }
-                res_head += "\r\n";
-                res_body = "Authorization Required";
-                goto request_done;
-              }
-            }
-          }
-        }
+        if (!check_authorization(httpd, vparam[0], vparam[1], script_name,
+              vauth, res_code, res_msg, res_head, res_body))
+          goto request_done;
 
         if (res_isdir(path) && vparam[1].size() && vparam[1][vparam[1].size()-1] != '/') {
           res_type = "text/plain";
@@ -1302,14 +1724,13 @@ request_top:
           type = "@";
         } else {
           if (!res_iscgi(path, path_info, script_name, httpd->mime_types, type)) {
-            for(it_mime = httpd->mime_types.begin(); it_mime != httpd->mime_types.end(); it_mime++) {
-              std::string match = ".";
-              match += it_mime->first;
-              if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+            size_t sep_pos = path.find_last_of("./");
+            if (sep_pos != std::string::npos && path[sep_pos] == '.') {
+              it_mime = httpd->mime_types.find(path.substr(sep_pos + 1));
+              if (it_mime != httpd->mime_types.end()) {
                 type = it_mime->second;
                 res_type = type;
               }
-              if (!type.empty()) break;
             }
           }
         }
@@ -1323,50 +1744,7 @@ request_top:
             res_type += "; charset=";
             res_type += trim_string(httpd->fs_charset);
           }
-          res_body = "<html><head><title>";
-          res_body += script_name;
-          res_body += "</title></head><body><h1>";
-          res_body += script_name;
-          res_body += "</h1><hr /><pre>";
-          res_body += "<table border=0>";
-          std::vector<server::ListInfo> flist = res_flist(path);
-          std::vector<server::ListInfo>::iterator it;
-
-          // TODO: sort and reverse, sort key
-          //std::map<std::string, std::string> params = tthttpd::parse_querystring(query_string);
-
-          for(it = flist.begin(); it != flist.end(); it++) {
-            std::string name = it->name;
-            res_body += "<tr><td><a href=\"";
-            res_body += tthttpd::url_encode(name);
-            res_body += "\">";
-            res_body += tthttpd::html_encode(name);
-            res_body += "</a></td>";
-            res_body += "<td>";
-            struct tm tm = it->date;
-            sprintf(buf, "%02d-%s-%04d %02d:%02d",
-              tm.tm_mday,
-              months[tm.tm_mon],
-              tm.tm_year+1900,
-              tm.tm_hour,
-              tm.tm_min);
-            res_body += buf;
-            res_body += "</td>";
-            res_body += "<td align=right>&nbsp;&nbsp;";
-            if (!it->isdir) {
-              if (it->size < 1000)
-                sprintf(buf, "%d", (int)it->size);
-              else
-              if (it->size < 1000000)
-                sprintf(buf, "%dK", (int)it->size/1000);
-              else
-                sprintf(buf, "%.1dM", (int)it->size/1000000);
-              res_body += buf;
-            } else
-              res_body += "[DIR]";
-            res_body += "</td></tr>";
-          }
-          res_body += "</table></pre ><hr /></body></html>";
+          res_body = build_directory_listing(script_name, path);
           goto request_done;
         }
 
@@ -1417,156 +1795,9 @@ request_top:
           std::vector<std::string> envs;
           std::vector<std::string> args;
 
-          if (type.size() == 1) {
-            args.push_back(path);
-          } else {
-            args.push_back(type.substr(1));
-            args.push_back(path);
-          }
-          if (query_string.size())
-            args.push_back(query_string);
-
-          std::string env;
-
-          if (http_headers.count("HTTP_HOST")) {
-            sprintf(buf, "HTTP_HOST=%s:%s", http_headers["HTTP_HOST"].c_str(), httpd->port.c_str());
-            env = buf;
-            envs.push_back(env);
-            http_headers.erase("HTTP_HOST");
-          } else
-          if (httpd->hostname.size()) {
-            sprintf(buf, "HTTP_HOST=%s:%s", httpd->hostname.c_str(), httpd->port.c_str());
-            env = buf;
-            envs.push_back(env);
-            http_headers.erase("HTTP_HOST");
-          }
-
-          http_headers.erase("SERVER_PROTOCOL");
-          http_headers.erase("SERVER_ADDR");
-          http_headers.erase("SERVER_NAME");
-          http_headers.erase("REMOTE_ADDR");
-          http_headers.erase("REMOTE_PORT");
-          http_headers.erase("REMOTE_USER");
-
-          env = "SERVER_PROTOCOL=HTTP/1.1";
-          envs.push_back(env);
-
-          env = "SERVER_ADDR=";
-          env += httpd->hostaddr[servno];
-          envs.push_back(env);
-
-          env = "SERVER_NAME=";
-          if (httpd->hostname.size()) {
-            env += httpd->hostname;
-          } else {
-            env += http_headers["HTTP_HOST"];
-          }
-          envs.push_back(env);
-
-          sprintf(buf, "SERVER_PORT=%s", httpd->port.c_str());
-          env = buf;
-          envs.push_back(env);
-
-          env = "REMOTE_ADDR=";
-          env += address;
-          envs.push_back(env);
-
-          sprintf(buf, "REMOTE_PORT=%s", port.c_str());
-          env = buf;
-          envs.push_back(env);
-
-          if (vauth.size() && !vauth[0].empty()) {
-            env = "REMOTE_USER=";
-            env += vauth[0];
-            envs.push_back(env);
-          }
-
-          server::HttpHeader::const_iterator it_head;
-          for (it_head = http_headers.begin(); it_head != http_headers.end(); it_head++) {
-            env = "HTTP_";
-            env += it_head->first;
-            env += "=";
-            env += it_head->second;
-            envs.push_back(env);
-          }
-
-          env = "REQUEST_METHOD=";
-          env += vparam[0];
-          envs.push_back(env);
-
-          env = "REQUEST_URI=";
-          env += request_uri;
-          envs.push_back(env);
-
-          env = "SCRIPT_FILENAME=";
-          env += path;
-          envs.push_back(env);
-
-          env = "SCRIPT_NAME=";
-          env += script_name;
-          envs.push_back(env);
-
-          env = "QUERY_STRING=";
-          env += query_string;
-          envs.push_back(env);
-
-          if (!path_info.empty()) {
-            env = "PATH_INFO=";
-            env += path_info;
-            envs.push_back(env);
-          } else {
-            env = "PATH_INFO=";
-            env += request_uri;
-            envs.push_back(env);
-          }
-
-          env = "REDIRECT_STATUS=1";
-          envs.push_back(env);
-
-          env = "PATH=";
-          env += getenv("PATH");
-          envs.push_back(env);
-
-#ifdef _WIN32
-          GetWindowsDirectoryA(buf, sizeof(buf));
-          env = "SystemRoot=";
-          env += buf;
-          envs.push_back(env);
-#endif
-
-          char* p = getenv("PERL5LIB");
-          if (p) {
-            env = "PERL5LIB=";
-            env += p;
-            envs.push_back(env);
-          }
-
-          env = "SERVER_SOFTWARE=tinytinyhttpd";
-          envs.push_back(env);
-
-          env = "SERVER_PROTOCOL=HTTP/1.1";
-          envs.push_back(env);
-
-          env = "GATEWAY_INTERFACE=CGI/1.1";
-          envs.push_back(env);
-
-          server::RequestEnvironments::iterator it_env;
-          for(it_env = httpd->request_environments.begin(); it_env != httpd->request_environments.end(); it_env++) {
-            env = it_env->first + "=";
-            env += it_env->second;
-            envs.push_back(env);
-          }
-
-          if (vparam[0] == "POST") {
-            env = "CONTENT_TYPE=";
-            env += http_headers["CONTENT_TYPE"];
-            envs.push_back(env);
-
-            sprintf(buf, "%d", (int)content_length);
-            env = "CONTENT_LENGTH=";
-            env += buf;
-            envs.push_back(env);
-          }
+          setup_cgi_args_env(httpd, servno, address, port, vparam[0],
+            request_uri, script_name, query_string, path_info, path, type,
+            content_length, vauth, http_headers, args, envs);
 
           if (VERBOSE(4)) {
             std::vector<std::string>::iterator it;
@@ -1583,11 +1814,22 @@ request_top:
 
           if (res_info && content_length > 0) {
             while (content_length) {
-              memset(buf, 0, sizeof(buf));
-              unsigned long read = recv(msgsock, buf, sizeof(buf), 0);
-              if (read <= 0) break;
-              int w = res_write(res_info, buf, read);
-              content_length -= w;
+              int nrecv = body_read(reader, buf,
+                content_length < sizeof(buf) ? content_length : sizeof(buf));
+              if (nrecv <= 0) break;
+              char* ptr = buf;
+              while (nrecv > 0) {
+                long w = (long)res_write(res_info, ptr, nrecv);
+                if (w < 0) {
+                  if (errno != EAGAIN && errno != EWOULDBLOCK) break;
+                  usleep(1000);
+                  continue;
+                }
+                ptr += w;
+                nrecv -= w;
+                content_length -= w;
+              }
+              if (nrecv > 0) break;
             }
 
             if (stricmp(http_headers["CONNECTION"].c_str(), "upgrade"))
@@ -1625,199 +1867,67 @@ request_top:
 request_done:
 
   if (content_length > 0) {
+    /* drain the unread request body */
     while(content_length > 0) {
-      int ret = recv(msgsock, buf, sizeof(buf), 0);
-      if (ret < 0) {
-        res_type = "text/plain";
-        res_code = "500";
-        res_msg = "Bad Request";
-        res_body = "Bad Request\n";
+      int nrecv = body_read(reader, buf,
+        content_length < sizeof(buf) ? content_length : sizeof(buf));
+      if (nrecv <= 0) {
+        keep_alive = false;
+        break;
       }
-      content_length -= ret;
+      content_length -= nrecv;
     }
   }
 
   if (res_info && res_info->process) {
-    bool res_keep_alive = false;
-    res_head.clear();
-
-    do {
-      memset(buf, 0, sizeof(buf));
-      str = res_fgets(res_info);
-      if (str.empty()) break;
-      const char *key, *ptr = str.c_str();
-      size_t len;
-      if (str[0] == '<') {
-        // workaround for broken non-header response.
-        send(msgsock, ptr, strlen(ptr), 0);
-        res_code.clear();
-        break;
-      }
-      if (VERBOSE(2)) printf("  %s\n", ptr);
-      if (res_head.empty()) {
-        if (!strnicmp(ptr, "HTTP/1.", 7)) {
-          char* tmp1;
-          char* tmp2;
-
-          tmp1 = (char*) strchr(ptr, ' ');
-          if (tmp1) {
-            *tmp1 = 0;
-            res_proto = ptr;
-            tmp2 = strchr(tmp1 + 1, ' ');
-            if (tmp2) {
-              *tmp2 = 0;
-              res_code = tmp1 + 1;
-              res_msg = tmp2 + 1;
-            } else {
-              res_code = tmp1 + 1;
-            }
-          }
-          continue;
-        }
-      }
-      key = "connection:";
-      len = strlen(key);
-      if (!strnicmp(ptr, key, len)) {
-        if (!stricmp(trim_string(ptr + len).c_str(), "keep-alive"))
-          res_keep_alive = true;
-      }
-      key = "WWW-Authenticate: Basic ";
-      len = strlen(key);
-      if (!strnicmp(ptr, key, len)) {
-        res_code = "401";
-        res_msg = "Unauthorized";
-      }
-      key = "Status:";
-      len = strlen(key);
-      if (!strnicmp(ptr, key, len)) {
-        std::vector<std::string> codes;
-        split_string(trim_string(str.substr(len)), " ", codes);
-        if (codes.size())
-          res_code = codes[0];
-        else
-          res_code = "";
-      }
-      key = "Content-Length:";
-      len = strlen(key);
-      if (!strnicmp(ptr, key, len)) {
-        res_info->size = (unsigned long)atol(str.substr(len).c_str());
-      }
-      res_head += ptr;
-      res_head += "\r\n";
-    } while (true);
-    if (!res_keep_alive) {
-      keep_alive = false;
-      res_head += "Connection: close\r\n";
-    }
+    parse_cgi_response_header(httpd, msgsock, res_info,
+      res_proto, res_code, res_msg, res_head, keep_alive);
   }
 
+  /* assemble the whole response header (and, for generated bodies, the
+   * body as well) into one buffer so it goes out in a single send(). */
+  ret.clear();
   if (!res_code.empty()) {
-    send(msgsock, res_proto.c_str(), (int)res_proto.size(), 0);
-    send(msgsock, " ", 1, 0);
-    send(msgsock, res_code.c_str(), (int)res_code.size(), 0);
-    send(msgsock, " ", 1, 0);
-    send(msgsock, res_msg.c_str(), (int)res_msg.size(), 0);
-    send(msgsock, "\r\n", 2, 0);
+    ret += res_proto;
+    ret += " ";
+    ret += res_code;
+    ret += " ";
+    ret += res_msg;
+    ret += "\r\n";
   }
-
-  if (!res_head.empty()) {
-    send(msgsock, res_head.c_str(), (int)res_head.size(), 0);
-  }
+  ret += res_head;
 
   if (res_info) {
-    send(msgsock, "\r\n", 2, 0);
-    unsigned long total = res_info->size;
-    int sent = 0;
-    if (total != (unsigned long) -1) {
-#if defined LINUX_SENDFILE_API
-      sent = sendfile(msgsock, res_info->read, NULL, total);
-#elif defined FREEBSD_SENDFILE_API
-      if (sendfile(msgsock, res_info->read, NULL, total, NULL, NULL, 0) == 0) sent = total;
-#elif defined _WIN32
-      if (!res_info->process && lpfnTransmitFile && lpfnTransmitFile(
-        msgsock,
-        res_info->read,
-        total,
-        0,
-        NULL,
-        NULL,
-        TF_WRITE_BEHIND)) sent = total;
-#endif
-    }
-    if (sent <= 0) {
-      if (VERBOSE(1)) printf("* transfer file using default function\n");
-      unsigned int fd = (unsigned int) msgsock;
-      fd_set fdset;
-      FD_ZERO(&fdset);
-      struct timeval tv;
-      tv.tv_sec = 0;
-      tv.tv_usec = 0;
-      while(total != 0) {
-        if (res_info->write) {
-          FD_SET(fd, &fdset);
-          int r = select(FD_SETSIZE, &fdset, NULL, NULL, &tv);
-          if (r < 0) break;
-          if (r > 0 && FD_ISSET(msgsock, &fdset)) {
-            memset(buf, 0, sizeof(buf));
-            int read = recv(msgsock, buf, sizeof(buf), 0);
-            if (read > 0) {
-              res_write(res_info, buf, read);
-            }
-          }
-        }
-        memset(buf, 0, sizeof(buf));
-        long long res = res_read(res_info, buf, sizeof(buf));
-        if (res < 0) break;
-        if (res > 0) {
-          if (VERBOSE(3))
-#ifdef _WIN32
-            printf("  reading part %I64d bytes\n", res);
-#else
-            printf("  reading part %lld bytes\n", res);
-#endif
-          send(msgsock, buf, res, 0);
-          if (total > 0) {
-            total -= res;
-          }
-        } else {
-#ifdef _WIN32
-          Sleep(1);
-#else
-          usleep(10);
-#endif
-        }
-      }
-    }
+    ret += "\r\n";
+    send(msgsock, ret.c_str(), (int)ret.size(), 0);
+    send_response_content(httpd, msgsock, res_info);
     res_close(res_info);
     res_info = NULL;
   } else
   if (!res_body.empty()) {
     if (keep_alive)
-      ret = "Connection: keep-alive\r\n";
+      ret += "Connection: keep-alive\r\n";
     else
-      ret = "Connection: close\r\n";
-    send(msgsock, ret.c_str(), (int)ret.size(), 0);
+      ret += "Connection: close\r\n";
 
-    ret = "Content-Type: ";
+    ret += "Content-Type: ";
     ret += res_type + "\r\n";
-    send(msgsock, ret.c_str(), (int)ret.size(), 0);
 
-    ret = res_body;
-    sprintf(length, "%u", ret.size());
-    ret = "Content-Length: ";
+    sprintf(length, "%lu", (unsigned long)res_body.size());
+    ret += "Content-Length: ";
     ret += length;
     ret += "\r\n";
+
+    ret += "\r\n";
+
+    if (vparam.size() > 0 && vparam[0] != "HEAD")
+      ret += res_body;
     send(msgsock, ret.c_str(), (int)ret.size(), 0);
-
-    send(msgsock, "\r\n", 2, 0);
-
-    if (vparam.size() > 0 && vparam[0] != "HEAD") {
-      ret = res_body;
-      send(msgsock, ret.c_str(), (int)ret.size(), 0);
-    }
   }
-  else
-    send(msgsock, "\r\n", (int)2, 0);
+  else {
+    ret += "\r\n";
+    send(msgsock, ret.c_str(), (int)ret.size(), 0);
+  }
 
   if (keep_alive)
     goto request_top;
@@ -1991,16 +2101,16 @@ void* watch_thread(void* param)
     for(fds = 0; fds < nserver; fds++) {
       int sock = httpd->socks[fds];
 
-      if (!FD_ISSET(sock, &fdset[fds]))
+      if (!FD_ISSET(sock, fdset))
         continue;
 
       memset(&client, 0, sizeof(client));
+      client_len = sizeof(client);
       msgsock = accept(sock, (struct sockaddr *)&client, (socklen_t *)&client_len);
       if (VERBOSE(3)) printf("* accepted socket %d\n", msgsock);
       if (msgsock == -1) {
         if (errno != EINTR && errno != EWOULDBLOCK)
           if (VERBOSE(1)) my_perror("accept");
-        closesocket(msgsock);
         break;
       } else {
         if (httpd->family == AF_INET) {
@@ -2045,7 +2155,7 @@ void* watch_thread(void* param)
     }
   }
 
-  delete[] fdset;
+  free(fdset);
 
 #if defined(_WIN32) && !defined(USE_PTHREAD)
   _endthread();
@@ -2084,7 +2194,9 @@ bool server::stop() {
 #else
   pthread_kill(thread, SIGINT);
 #endif
-  wait();
+  /* joining here would deadlock when stop() is called from a signal
+   * handler while another thread already sits in wait(); callers use
+   * wait() to block until the listener thread is gone. */
   return true;
 }
 
@@ -2094,7 +2206,7 @@ bool server::wait() {
 #else
   pthread_join(thread, NULL);
 #endif
-  thread = NULL;
+  thread = 0;
   return true;
 }
 

@@ -2,4 +2,15 @@ Makefile
 Makefile.in
 configure
 config.h
+config.h.in~
+config.log
+config.status
+config.guess
+config.sub
+compile
+stamp-h1
 autom4te.cache
+.deps
+*.o
+tthttpd
+configure~
