@@ -13,3 +13,4 @@ autom4te.cache
 .deps
 *.o
 tthttpd
+configure~
