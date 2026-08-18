@@ -371,6 +371,11 @@ static bool filetime2unixtime(const FILETIME* ft, struct tm* tm) {
 }
 #endif
 
+static bool match_suffix(const std::string& str, const std::string& suffix) {
+  return str.size() >= suffix.size() &&
+    !strcmp(str.c_str() + str.size() - suffix.size(), suffix.c_str());
+}
+
 static std::string res_curtime(int diff = 0) {
   time_t tt = time(NULL) + diff;
   struct tm* p = gmtime(&tt);
@@ -462,7 +467,7 @@ static bool res_isexe(std::string& file, std::string& path_info, std::string& sc
       struct stat  st;
     if (stat((char *)path.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
       for (itext = pathexts.begin(); itext != pathexts.end(); itext++) {
-        if (path.substr(path.size() - itext->size()) == *itext) {
+        if (match_suffix(path, *itext)) {
           path_info = file.c_str() + path.size();
           script_name.resize(script_name.size() - path_info.size());
           file = path;
@@ -502,7 +507,7 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
       if (it_mime->second[0] != '@') continue;
       std::string match = ".";
       match += it_mime->first;
-      if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+      if (match_suffix(path, match)) {
         type = it_mime->second;
         path_info = file.c_str() + path.size();
         script_name.resize(script_name.size() - path_info.size());
@@ -822,7 +827,7 @@ static bool res_iscgi(std::string& file, std::string& path_info, std::string& sc
       if (it_mime->second[0] != '@') continue;
       std::string match = ".";
       match += it_mime->first;
-      if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+      if (match_suffix(path, match)) {
         type = it_mime->second;
         path_info = file.c_str() + path.size();
         script_name.resize(script_name.size() - path_info.size());
@@ -1302,7 +1307,7 @@ request_top:
             for(it_mime = httpd->mime_types.begin(); it_mime != httpd->mime_types.end(); it_mime++) {
               std::string match = ".";
               match += it_mime->first;
-              if (!strcmp(path.c_str()+path.size()-match.size(), match.c_str())) {
+              if (match_suffix(path, match)) {
                 type = it_mime->second;
                 res_type = type;
               }
