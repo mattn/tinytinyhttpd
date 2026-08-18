@@ -1275,6 +1275,75 @@ static void send_response_content(server* httpd, int msgsock, RES_INFO* res_info
   }
 }
 
+static void prepare_401_response(const std::string& realm,
+    std::string& res_code, std::string& res_msg,
+    std::string& res_head, std::string& res_body) {
+  res_code = "401";
+  res_msg = "Authorization Required";
+  res_head = "WWW-Authenticate: Basic";
+  if (!realm.empty()) {
+    res_head += " realm=\"";
+    res_head += realm;
+    res_head += "\"";
+  }
+  res_head += "\r\n";
+  res_body = "Authorization Required";
+}
+
+/* check basic auth credentials and per-path accept lists.
+ * returns true when the request may proceed; false means a 401 response
+ * has been prepared. */
+static bool check_authorization(server* httpd, const std::string& method,
+    const std::string& request_target, const std::string& script_name,
+    const std::vector<std::string>& vauth,
+    std::string& res_code, std::string& res_msg,
+    std::string& res_head, std::string& res_body) {
+  std::vector<server::BasicAuthInfo>::iterator it_basicauth;
+  std::vector<std::string> methods;
+  for (it_basicauth = httpd->basic_auths.begin(); it_basicauth != httpd->basic_auths.end(); it_basicauth++) {
+    split_string(it_basicauth->method, "/", methods);
+    if (!methods.empty() && std::find(methods.begin(), methods.end(), method) == methods.end()) continue;
+    if (!it_basicauth->target.empty() && strncmp(request_target.c_str(), it_basicauth->target.c_str(), it_basicauth->target.size())) continue;
+    break;
+  }
+  if (it_basicauth != httpd->basic_auths.end()) {
+    bool authorized = false;
+    if (vauth.size() >= 2) {
+      if (VERBOSE(2)) printf("  authorizing %s\n", request_target.c_str());
+      std::vector<server::AuthInfo>::iterator it_auth;
+      for (it_auth = it_basicauth->auths.begin(); it_auth != it_basicauth->auths.end(); it_auth++) {
+        if (it_auth->user != vauth[0]) continue;
+        // TODO: only support plain-text password.
+        //  hope to access .htpasswd file.
+        if (it_auth->pass != vauth[1]) continue;
+        authorized = true;
+      }
+    }
+    if (!authorized) {
+      prepare_401_response(it_basicauth->realm,
+        res_code, res_msg, res_head, res_body);
+      return false;
+    }
+  }
+  if (!vauth.empty()) {
+    server::AcceptAuths::iterator it_accept;
+    for(it_accept = httpd->accept_auths.begin(); it_accept != httpd->accept_auths.end(); it_accept++) {
+      if (!strncmp(it_accept->first.c_str(), script_name.c_str(), it_accept->first.size())) {
+        if (std::find(
+              it_accept->second.accept_list.begin(),
+              it_accept->second.accept_list.end(), vauth[0])
+            == it_accept->second.accept_list.end()) {
+          prepare_401_response(
+            it_basicauth != httpd->basic_auths.end() ? it_basicauth->realm : "",
+            res_code, res_msg, res_head, res_body);
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
 /* build the argument list and CGI/1.1 environment for a CGI request. */
 static void setup_cgi_args_env(server* httpd, int servno,
     const std::string& address, const std::string& port,
@@ -1579,74 +1648,9 @@ request_top:
         }
         */
 
-        std::vector<server::BasicAuthInfo>::iterator it_basicauth;
-        std::vector<std::string> methods;
-        for (it_basicauth = httpd->basic_auths.begin(); it_basicauth != httpd->basic_auths.end(); it_basicauth++) {
-          split_string(it_basicauth->method, "/", methods);
-          if (!methods.empty() && std::find(methods.begin(), methods.end(), vparam[0]) == methods.end()) continue;
-          if (!it_basicauth->target.empty() && strncmp(vparam[1].c_str(), it_basicauth->target.c_str(), it_basicauth->target.size())) continue;
-          break;
-        }
-        if (it_basicauth != httpd->basic_auths.end()) {
-          bool authorized = false;
-          if (vauth.size() >= 2) {
-            if (VERBOSE(2)) printf("  authorizing %s\n", vparam[1].c_str());
-            std::vector<server::AuthInfo>::iterator it_auth;
-            for (it_auth = it_basicauth->auths.begin(); it_auth != it_basicauth->auths.end(); it_auth++) {
-              if (it_auth->user != vauth[0]) continue;
-              /*
-              std::vector<std::string> pwd = split_string(it_auth->pass, "$");
-              std::string tmp = vauth[1];
-              tmp += "$apr1$";
-              tmp += pwd[2];
-              std::string pwd_md5 = string_to_hex(crypt(vauth[1].c_str(), pwd[2].c_str()));
-              printf("%s, %s\n", pwd_md5.c_str(), it_auth->pass.c_str());
-              if (it_auth->pass != pwd_md5) continue;
-              */
-              // TODO: only support plain-text password.
-              //  hope to access .htpasswd file.
-              if (it_auth->pass != vauth[1]) continue;
-              authorized = true;
-            }
-          }
-          if (!authorized) {
-            res_code = "401";
-            res_msg = "Authorization Required";
-            res_head = "WWW-Authenticate: Basic";
-            if (!it_basicauth->realm.empty()) {
-              res_head += " realm=\"";
-              res_head += it_basicauth->realm;
-              res_head += "\"";
-            }
-            res_head += "\r\n";
-            res_body = "Authorization Required";
-            goto request_done;
-          }
-        }
-        if (!vauth.empty()) {
-          server::AcceptAuths::iterator it_accept;
-          for(it_accept = httpd->accept_auths.begin(); it_accept != httpd->accept_auths.end(); it_accept++) {
-            if (!strncmp(it_accept->first.c_str(), script_name.c_str(), it_accept->first.size())) {
-              if (std::find(
-                    it_accept->second.accept_list.begin(),
-                    it_accept->second.accept_list.end(), vauth[0])
-                  == it_accept->second.accept_list.end()) {
-                res_code = "401";
-                res_msg = "Authorization Required";
-                res_head = "WWW-Authenticate: Basic";
-                if (it_basicauth != httpd->basic_auths.end()
-                    && !it_basicauth->realm.empty()) {
-                  res_head += " realm=\"";
-                  res_head += it_basicauth->realm;
-                  res_head += "\"";
-                }
-                res_head += "\r\n";
-                res_body = "Authorization Required";
-                goto request_done;
-              }
-            }
-          }
-        }
+        if (!check_authorization(httpd, vparam[0], vparam[1], script_name,
+              vauth, res_code, res_msg, res_head, res_body))
+          goto request_done;
 
         if (res_isdir(path) && vparam[1].size() && vparam[1][vparam[1].size()-1] != '/') {
           res_type = "text/plain";
