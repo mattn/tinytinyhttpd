@@ -1580,11 +1580,21 @@ request_top:
 
           if (res_info && content_length > 0) {
             while (content_length) {
-              memset(buf, 0, sizeof(buf));
-              unsigned long read = recv(msgsock, buf, sizeof(buf), 0);
-              if (read <= 0) break;
-              int w = res_write(res_info, buf, read);
-              content_length -= w;
+              int nrecv = recv(msgsock, buf, sizeof(buf), 0);
+              if (nrecv <= 0) break;
+              char* ptr = buf;
+              while (nrecv > 0) {
+                long w = (long)res_write(res_info, ptr, nrecv);
+                if (w < 0) {
+                  if (errno != EAGAIN && errno != EWOULDBLOCK) break;
+                  usleep(1000);
+                  continue;
+                }
+                ptr += w;
+                nrecv -= w;
+                content_length -= w;
+              }
+              if (nrecv > 0) break;
             }
 
             if (stricmp(http_headers["CONNECTION"].c_str(), "upgrade"))
@@ -1622,15 +1632,15 @@ request_top:
 request_done:
 
   if (content_length > 0) {
+    /* drain the unread request body */
     while(content_length > 0) {
-      int ret = recv(msgsock, buf, sizeof(buf), 0);
-      if (ret < 0) {
-        res_type = "text/plain";
-        res_code = "500";
-        res_msg = "Bad Request";
-        res_body = "Bad Request\n";
+      int nrecv = recv(msgsock, buf,
+        content_length < sizeof(buf) ? content_length : sizeof(buf), 0);
+      if (nrecv <= 0) {
+        keep_alive = false;
+        break;
       }
-      content_length -= ret;
+      content_length -= nrecv;
     }
   }
 
