@@ -1634,7 +1634,8 @@ request_top:
                 res_code = "401";
                 res_msg = "Authorization Required";
                 res_head = "WWW-Authenticate: Basic";
-                if (!it_basicauth->realm.empty()) {
+                if (it_basicauth != httpd->basic_auths.end()
+                    && !it_basicauth->realm.empty()) {
                   res_head += " realm=\"";
                   res_head += it_basicauth->realm;
                   res_head += "\"";
