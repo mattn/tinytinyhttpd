@@ -1437,17 +1437,20 @@ request_top:
 
           std::string env;
 
-          if (http_headers.count("HTTP_HOST")) {
-            sprintf(buf, "HTTP_HOST=%s:%s", http_headers["HTTP_HOST"].c_str(), httpd->port.c_str());
-            env = buf;
+          std::string host_header;
+          if (http_headers.count("HOST")) {
+            host_header = http_headers["HOST"];
+            http_headers.erase("HOST");
+          }
+          if (!host_header.empty()) {
+            env = "HTTP_HOST=";
+            env += host_header;
             envs.push_back(env);
-            http_headers.erase("HTTP_HOST");
           } else
           if (httpd->hostname.size()) {
             sprintf(buf, "HTTP_HOST=%s:%s", httpd->hostname.c_str(), httpd->port.c_str());
             env = buf;
             envs.push_back(env);
-            http_headers.erase("HTTP_HOST");
           }
 
           http_headers.erase("SERVER_PROTOCOL");
@@ -1468,7 +1471,11 @@ request_top:
           if (httpd->hostname.size()) {
             env += httpd->hostname;
           } else {
-            env += http_headers["HTTP_HOST"];
+            std::string server_name = host_header;
+            size_t colon_pos = server_name.find_last_of(':');
+            if (colon_pos != std::string::npos)
+              server_name.resize(colon_pos);
+            env += server_name;
           }
           envs.push_back(env);
 
