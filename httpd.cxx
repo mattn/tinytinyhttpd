@@ -1132,6 +1132,174 @@ static bool read_request_headers(int msgsock, server::HttpHeader& http_headers) 
   return true;
 }
 
+/* build the argument list and CGI/1.1 environment for a CGI request. */
+static void setup_cgi_args_env(server* httpd, int servno,
+    const std::string& address, const std::string& port,
+    const std::string& method,
+    const std::string& request_uri, const std::string& script_name,
+    const std::string& query_string, const std::string& path_info,
+    const std::string& path, const std::string& type,
+    unsigned long content_length,
+    const std::vector<std::string>& vauth,
+    server::HttpHeader& http_headers,
+    std::vector<std::string>& args, std::vector<std::string>& envs) {
+  char buf[BUFSIZ];
+
+  if (type.size() == 1) {
+    args.push_back(path);
+  } else {
+    args.push_back(type.substr(1));
+    args.push_back(path);
+  }
+  if (query_string.size())
+    args.push_back(query_string);
+
+  std::string env;
+
+  std::string host_header;
+  if (http_headers.count("HOST")) {
+    host_header = http_headers["HOST"];
+    http_headers.erase("HOST");
+  }
+  if (!host_header.empty()) {
+    env = "HTTP_HOST=";
+    env += host_header;
+    envs.push_back(env);
+  } else
+  if (httpd->hostname.size()) {
+    sprintf(buf, "HTTP_HOST=%s:%s", httpd->hostname.c_str(), httpd->port.c_str());
+    env = buf;
+    envs.push_back(env);
+  }
+
+  http_headers.erase("SERVER_PROTOCOL");
+  http_headers.erase("SERVER_ADDR");
+  http_headers.erase("SERVER_NAME");
+  http_headers.erase("REMOTE_ADDR");
+  http_headers.erase("REMOTE_PORT");
+  http_headers.erase("REMOTE_USER");
+
+  env = "SERVER_PROTOCOL=HTTP/1.1";
+  envs.push_back(env);
+
+  env = "SERVER_ADDR=";
+  env += httpd->hostaddr[servno];
+  envs.push_back(env);
+
+  env = "SERVER_NAME=";
+  if (httpd->hostname.size()) {
+    env += httpd->hostname;
+  } else {
+    std::string server_name = host_header;
+    size_t colon_pos = server_name.find_last_of(':');
+    if (colon_pos != std::string::npos)
+      server_name.resize(colon_pos);
+    env += server_name;
+  }
+  envs.push_back(env);
+
+  sprintf(buf, "SERVER_PORT=%s", httpd->port.c_str());
+  env = buf;
+  envs.push_back(env);
+
+  env = "REMOTE_ADDR=";
+  env += address;
+  envs.push_back(env);
+
+  sprintf(buf, "REMOTE_PORT=%s", port.c_str());
+  env = buf;
+  envs.push_back(env);
+
+  if (vauth.size() && !vauth[0].empty()) {
+    env = "REMOTE_USER=";
+    env += vauth[0];
+    envs.push_back(env);
+  }
+
+  server::HttpHeader::const_iterator it_head;
+  for (it_head = http_headers.begin(); it_head != http_headers.end(); it_head++) {
+    env = "HTTP_";
+    env += it_head->first;
+    env += "=";
+    env += it_head->second;
+    envs.push_back(env);
+  }
+
+  env = "REQUEST_METHOD=";
+  env += method;
+  envs.push_back(env);
+
+  env = "REQUEST_URI=";
+  env += request_uri;
+  envs.push_back(env);
+
+  env = "SCRIPT_FILENAME=";
+  env += path;
+  envs.push_back(env);
+
+  env = "SCRIPT_NAME=";
+  env += script_name;
+  envs.push_back(env);
+
+  env = "QUERY_STRING=";
+  env += query_string;
+  envs.push_back(env);
+
+  if (!path_info.empty()) {
+    env = "PATH_INFO=";
+    env += path_info;
+    envs.push_back(env);
+  } else {
+    env = "PATH_INFO=";
+    env += request_uri;
+    envs.push_back(env);
+  }
+
+  env = "REDIRECT_STATUS=1";
+  envs.push_back(env);
+
+  env = "PATH=";
+  env += getenv("PATH");
+  envs.push_back(env);
+
+#ifdef _WIN32
+  GetWindowsDirectoryA(buf, sizeof(buf));
+  env = "SystemRoot=";
+  env += buf;
+  envs.push_back(env);
+#endif
+
+  char* p = getenv("PERL5LIB");
+  if (p) {
+    env = "PERL5LIB=";
+    env += p;
+    envs.push_back(env);
+  }
+
+  env = "SERVER_SOFTWARE=tinytinyhttpd";
+  envs.push_back(env);
+
+  env = "GATEWAY_INTERFACE=CGI/1.1";
+  envs.push_back(env);
+
+  server::RequestEnvironments::iterator it_env;
+  for(it_env = httpd->request_environments.begin(); it_env != httpd->request_environments.end(); it_env++) {
+    env = it_env->first + "=";
+    env += it_env->second;
+    envs.push_back(env);
+  }
+
+  if (method == "POST") {
+    env = "CONTENT_TYPE=";
+    env += http_headers["CONTENT_TYPE"];
+    envs.push_back(env);
+
+    sprintf(buf, "CONTENT_LENGTH=%lu", content_length);
+    env = buf;
+    envs.push_back(env);
+  }
+}
+
 void* response_thread(void* param) {
   server::HttpdInfo *pHttpdInfo = (server::HttpdInfo*)param;
   server *httpd = pHttpdInfo->httpd;
@@ -1442,163 +1610,9 @@ request_top:
           std::vector<std::string> envs;
           std::vector<std::string> args;
 
-          if (type.size() == 1) {
-            args.push_back(path);
-          } else {
-            args.push_back(type.substr(1));
-            args.push_back(path);
-          }
-          if (query_string.size())
-            args.push_back(query_string);
-
-          std::string env;
-
-          std::string host_header;
-          if (http_headers.count("HOST")) {
-            host_header = http_headers["HOST"];
-            http_headers.erase("HOST");
-          }
-          if (!host_header.empty()) {
-            env = "HTTP_HOST=";
-            env += host_header;
-            envs.push_back(env);
-          } else
-          if (httpd->hostname.size()) {
-            sprintf(buf, "HTTP_HOST=%s:%s", httpd->hostname.c_str(), httpd->port.c_str());
-            env = buf;
-            envs.push_back(env);
-          }
-
-          http_headers.erase("SERVER_PROTOCOL");
-          http_headers.erase("SERVER_ADDR");
-          http_headers.erase("SERVER_NAME");
-          http_headers.erase("REMOTE_ADDR");
-          http_headers.erase("REMOTE_PORT");
-          http_headers.erase("REMOTE_USER");
-
-          env = "SERVER_PROTOCOL=HTTP/1.1";
-          envs.push_back(env);
-
-          env = "SERVER_ADDR=";
-          env += httpd->hostaddr[servno];
-          envs.push_back(env);
-
-          env = "SERVER_NAME=";
-          if (httpd->hostname.size()) {
-            env += httpd->hostname;
-          } else {
-            std::string server_name = host_header;
-            size_t colon_pos = server_name.find_last_of(':');
-            if (colon_pos != std::string::npos)
-              server_name.resize(colon_pos);
-            env += server_name;
-          }
-          envs.push_back(env);
-
-          sprintf(buf, "SERVER_PORT=%s", httpd->port.c_str());
-          env = buf;
-          envs.push_back(env);
-
-          env = "REMOTE_ADDR=";
-          env += address;
-          envs.push_back(env);
-
-          sprintf(buf, "REMOTE_PORT=%s", port.c_str());
-          env = buf;
-          envs.push_back(env);
-
-          if (vauth.size() && !vauth[0].empty()) {
-            env = "REMOTE_USER=";
-            env += vauth[0];
-            envs.push_back(env);
-          }
-
-          server::HttpHeader::const_iterator it_head;
-          for (it_head = http_headers.begin(); it_head != http_headers.end(); it_head++) {
-            env = "HTTP_";
-            env += it_head->first;
-            env += "=";
-            env += it_head->second;
-            envs.push_back(env);
-          }
-
-          env = "REQUEST_METHOD=";
-          env += vparam[0];
-          envs.push_back(env);
-
-          env = "REQUEST_URI=";
-          env += request_uri;
-          envs.push_back(env);
-
-          env = "SCRIPT_FILENAME=";
-          env += path;
-          envs.push_back(env);
-
-          env = "SCRIPT_NAME=";
-          env += script_name;
-          envs.push_back(env);
-
-          env = "QUERY_STRING=";
-          env += query_string;
-          envs.push_back(env);
-
-          if (!path_info.empty()) {
-            env = "PATH_INFO=";
-            env += path_info;
-            envs.push_back(env);
-          } else {
-            env = "PATH_INFO=";
-            env += request_uri;
-            envs.push_back(env);
-          }
-
-          env = "REDIRECT_STATUS=1";
-          envs.push_back(env);
-
-          env = "PATH=";
-          env += getenv("PATH");
-          envs.push_back(env);
-
-#ifdef _WIN32
-          GetWindowsDirectoryA(buf, sizeof(buf));
-          env = "SystemRoot=";
-          env += buf;
-          envs.push_back(env);
-#endif
-
-          char* p = getenv("PERL5LIB");
-          if (p) {
-            env = "PERL5LIB=";
-            env += p;
-            envs.push_back(env);
-          }
-
-          env = "SERVER_SOFTWARE=tinytinyhttpd";
-          envs.push_back(env);
-
-          env = "SERVER_PROTOCOL=HTTP/1.1";
-          envs.push_back(env);
-
-          env = "GATEWAY_INTERFACE=CGI/1.1";
-          envs.push_back(env);
-
-          server::RequestEnvironments::iterator it_env;
-          for(it_env = httpd->request_environments.begin(); it_env != httpd->request_environments.end(); it_env++) {
-            env = it_env->first + "=";
-            env += it_env->second;
-            envs.push_back(env);
-          }
-
-          if (vparam[0] == "POST") {
-            env = "CONTENT_TYPE=";
-            env += http_headers["CONTENT_TYPE"];
-            envs.push_back(env);
-
-            sprintf(buf, "%d", (int)content_length);
-            env = "CONTENT_LENGTH=";
-            env += buf;
-            envs.push_back(env);
-          }
+          setup_cgi_args_env(httpd, servno, address, port, vparam[0],
+            request_uri, script_name, query_string, path_info, path, type,
+            content_length, vauth, http_headers, args, envs);
 
           if (VERBOSE(4)) {
             std::vector<std::string>::iterator it;
